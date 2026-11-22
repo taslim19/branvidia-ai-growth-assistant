@@ -74,6 +74,37 @@ describe("OpenAI-compatible adapter (NVIDIA NIM)", () => {
     expect(llmConfigFromEnv({ LLM_API_KEY: key, LLM_CHAT_TEMPLATE_KWARGS: '"str"' })).toBeNull();
   });
 
+  it("feeds schema issue paths back on the correction retry (NVIDIA nextSteps shape)", async () => {
+    // Live NVIDIA replies used {"step": "..."} entries missing title/detail.
+    const wrong = JSON.stringify({
+      problems: [], suggestions: [],
+      nextSteps: [{ step: "Do the thing", timeframe: "Today" }],
+    });
+    const fixed = JSON.stringify({
+      problems: [], suggestions: [],
+      nextSteps: [{ title: "Do the thing", detail: "Because reasons", timeframe: "Today" }],
+    });
+    const synthSchema = z.object({
+      problems: z.array(z.unknown()),
+      suggestions: z.array(z.unknown()),
+      nextSteps: z.array(z.object({
+        title: z.string().min(1),
+        detail: z.string().min(1),
+        timeframe: z.string().min(1),
+      })),
+    });
+    const seen: string[] = [];
+    const llm = new ProviderLLM(config, async (_s, user) => {
+      seen.push(user);
+      return seen.length === 1 ? wrong : fixed;
+    });
+    const result = await llm.completeJSON("synthesis", "s", "u", synthSchema);
+    expect(result.nextSteps[0].title).toBe("Do the thing");
+    expect(seen).toHaveLength(2);
+    expect(seen[1]).toContain("nextSteps.0.title");
+    expect(seen[1]).toContain("nextSteps.0.detail");
+  });
+
   it("retries transient 502/503/504 within the shared attempt cap", async () => {
     for (const status of [502, 503, 504]) {
       const fetcher = vi.fn()

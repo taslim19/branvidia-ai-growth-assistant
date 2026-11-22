@@ -11,6 +11,6 @@ Missing photo types: {{photoMissing}}
 Produce:
 - problems: merge the audit problems with review-driven and photo-driven ones. Worst first, at most 6. Each: title, detail (reference the actual data), severity high|medium|low.
 - suggestions: the matching fixes, most impactful first, at most 7. Each: title, detail, impact high|medium|low, effort "quick win"|"moderate"|"bigger project".
-- nextSteps: 4-6 ordered steps with realistic timeframes ("Today", "This week", "Within 2 weeks", "This month", "In 3-4 weeks").
+- nextSteps: 4-6 ordered steps. Each: title, detail, timeframe, with realistic timeframes ("Today", "This week", "Within 2 weeks", "This month", "In 3-4 weeks"). Every entry must have all three of title, detail and timeframe.
 
 Reply with one JSON object: {"problems": [...], "suggestions": [...], "nextSteps": [...]}

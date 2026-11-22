@@ -249,14 +249,22 @@ export class ProviderLLM implements LlmClient {
         const httpStatus = err instanceof LlmError ? err.httpStatus : undefined;
         throw new LlmError("LLM request failed", false, category, httpStatus, task);
       }
+      let issues = "";
       try {
         const parsed: unknown = JSON.parse(extractJson(raw));
         const result = schema.safeParse(parsed);
         if (result.success) return result.data;
+        // Field paths and expected shapes only, never logged; feeding them
+        // back lets the model repair structural mismatches precisely.
+        issues = result.error.issues
+          .slice(0, 5)
+          .map((issue) => `${issue.path.join(".") || "(root)"}: ${issue.message}`)
+          .join("; ");
       } catch { /* Parse failures use the same single correction below. */ }
       invalidReplies += 1;
       if (invalidReplies > 1 || attempt === 2) break;
-      prompt = `${user}\n\nYour previous reply was not valid: JSON/schema validation failed. ` +
+      prompt = `${user}\n\nYour previous reply was not valid: JSON/schema validation failed` +
+        `${issues ? ` (${issues})` : ""}. ` +
         "Reply with only the corrected JSON object matching the requested schema, no commentary.";
     }
     throw new LlmError("LLM did not return valid JSON after one correction retry", false, "invalid_json", undefined, task);
