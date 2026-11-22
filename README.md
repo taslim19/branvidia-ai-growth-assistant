@@ -144,3 +144,22 @@ Consent refresh safely restarts the simulated account picker and keeps the intak
 ## Vercel
 
 See `docs/VERCEL.md`. Vercel needs `MONGODB_URI` and `TOKEN_ENCRYPTION_KEY`: the in-memory fallback is not durable on serverless. `/api/health` reports `durable`.
+
+### API-backed session regression
+
+The session validator replays state transitions and structured cards. Plain
+assistant wording is allowed to vary, and each user turn stores the extracted
+intake value separately from the displayed raw answer. Stored client state is
+not proof of Google authorization.
+
+To reproduce the AI-wording/extraction regression without a model key or vendor
+calls (requires Chrome, or set `CHROME_PATH`):
+
+```sh
+NEXT_PUBLIC_API_BASE_URL=/api npm run build
+npm run test:session-api
+```
+
+The test starts its own no-key mock-Google server on port 3118. It varies chat
+responses locally, refreshes after every answer, then checks report generation
+from both the homepage and `/assistant`, report refresh and the dashboard.

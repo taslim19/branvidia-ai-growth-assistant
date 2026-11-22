@@ -4,18 +4,24 @@ import { openingTurn, processChatTurn, skipOptInTurn, type ChatSessionState } fr
 
 export const SESSION_KEY = "branvidia:chat-session-v2";
 export const LAST_REPORT_KEY = "branvidia:last-report-v1";
-export interface SessionSnapshot { version: 2; state: ChatSessionState; messages: ChatMessage[] }
+// The display text can differ from the intake value extracted by the backend.
+// Keep both, so replay uses the same answer as the original state transition.
+export interface SessionMessage extends ChatMessage { intakeValue?: string }
+export interface SessionSnapshot { version: 2; state: ChatSessionState; messages: SessionMessage[] }
 export function stepForSession(state: ChatSessionState): number {
   if (state.phase === "asking") return state.questionIndex <= 0 ? 1 : 2;
   if (state.phase === "analysis") return 6;
   return 3;
 }
 const same = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
-function content(m: ChatMessage) {
+function content(m: SessionMessage) {
   return { role: m.role, kind: m.kind, text: m.text, quickReplies: m.quickReplies,
-    summaryRows: m.summaryRows, tips: m.tips };
+    summaryRows: m.summaryRows, tips: m.tips, intakeValue: m.intakeValue };
 }
-// Replay the expected transcript, not a stored numeric step or claimed phase.
+// Replay transitions and exact structured payloads, not a stored step or phase.
+// Plain assistant text is presentation only: the backend may reword it with AI.
+// This checks consistency, not authenticity of client storage. No stored value
+// authorizes Google access or replaces the server's own request validation.
 // Unknown fields never become rendering instructions.
 export function validateSession(value: unknown): SessionSnapshot | null {
   try {
@@ -28,12 +34,25 @@ export function validateSession(value: unknown): SessionSnapshot | null {
       (m.tips === undefined || (Array.isArray(m.tips) && m.tips.every(x => typeof x === "string"))) &&
       (m.summaryRows === undefined || (Array.isArray(m.summaryRows) && m.summaryRows.every(x => x && typeof x.label === "string" && typeof x.value === "string")))
     )) return null;
+    if (!p.messages.every(m => m.intakeValue === undefined ||
+      (m.role === "user" && m.kind === "text" && typeof m.intakeValue === "string" &&
+       m.intakeValue.trim().length > 0 && m.intakeValue.length <= 1000))) return null;
     if (new Set(p.messages.map(m => m.id)).size !== p.messages.length) return null;
     let state = openingTurn().state;
     let cursor = 0;
     const consume = (replies: ReturnType<typeof openingTurn>["replies"]) => {
       for (const reply of replies) {
-        if (!p.messages[cursor] || !same(content(p.messages[cursor]), content(reply as ChatMessage))) throw new Error("transcript mismatch");
+        const actual = p.messages[cursor];
+        if (!actual) throw new Error("missing reply");
+        const expected = content(reply as ChatMessage);
+        const displayed = content(actual);
+        // Only plain assistant wording may vary. Role, kind, quick replies,
+        // tips and summary rows still have to match the replay exactly.
+        if (reply.role === "assistant" && reply.kind === "text") {
+          if (!actual.text.trim()) throw new Error("empty reply");
+          displayed.text = expected.text;
+        }
+        if (!same(displayed, expected)) throw new Error("transcript mismatch");
         cursor++;
       }
     };
@@ -42,7 +61,9 @@ export function validateSession(value: unknown): SessionSnapshot | null {
       const m = p.messages[cursor];
       if (m.role === "user" && m.kind === "text" && m.text.trim() && (state.phase === "asking" || state.phase === "tips")) {
         cursor++;
-        const turn = processChatTurn(state, m.text);
+        if (m.quickReplies !== undefined || m.summaryRows !== undefined || m.tips !== undefined) return null;
+        if (state.phase !== "asking" && m.intakeValue !== undefined) return null;
+        const turn = processChatTurn(state, m.intakeValue ?? m.text);
         state = turn.state; consume(turn.replies);
       } else if (state.phase === "optin" && m.kind === "optin" && m.role === "assistant" && m.text === CANCELLED_MESSAGE) {
         consume([{role: "assistant", kind: "optin", text: CANCELLED_MESSAGE}]);

@@ -3,10 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChatMessage } from "@/types";
 import { getChatOpening, sendChatMessage, skipGoogleOptIn } from "@/lib/apiClient";
-import { CANCELLED_MESSAGE } from "@/mock/chatScript";
+import { CHAT_QUESTIONS, CANCELLED_MESSAGE } from "@/mock/chatScript";
 import type { ChatTurnResult } from "@/lib/chatFlow";
 import { initialChatState } from "@/lib/chatFlow";
-import { SESSION_KEY, LAST_REPORT_KEY, stepForSession, validateSession, type SessionSnapshot } from "@/lib/chatSession";
+import { SESSION_KEY, LAST_REPORT_KEY, stepForSession, validateSession, type SessionSnapshot, type SessionMessage } from "@/lib/chatSession";
 
 let idCounter = 0;
 function materialize(result: Pick<ChatTurnResult, "replies">): ChatMessage[] {
@@ -67,10 +67,14 @@ export function useChatSession(autoStart: boolean) {
     if (busy.current || !text.trim() || !["asking","tips"].includes(current.current.state.phase)) return;
     busy.current=true; setError(null); setTyping(true);
     const token=generation.current;
-    const user=materialize({replies:[{role:"user",kind:"text",text:text.trim()}]}); setPending(user);
+    const user: SessionMessage[]=materialize({replies:[{role:"user",kind:"text",text:text.trim()}]}); setPending(user);
     try {
       const result=await sendChatMessage(current.current.state,text.trim());
-      if (token===generation.current) commit({version:2,state:result.state,messages:[...current.current.messages,...user,...materialize(result)]});
+      if (token===generation.current) {
+        const question = current.current.state.phase === "asking" ? CHAT_QUESTIONS[current.current.state.questionIndex] : undefined;
+        if (question) user[0].intakeValue = result.state.info[question.key];
+        commit({version:2,state:result.state,messages:[...current.current.messages,...user,...materialize(result)]});
+      }
     } catch { if (token===generation.current) setError("That message didn’t go through. Try sending it again."); }
     finally { if (token===generation.current) {setPending([]); setTyping(false); busy.current=false;} }
   }, [commit]);

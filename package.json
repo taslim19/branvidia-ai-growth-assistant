@@ -10,7 +10,8 @@
     "test": "node --test tests/session.test.cjs tests/provider.test.cjs && vitest run",
     "test:refresh": "node tests/refresh.cjs",
     "test:e2e": "node tests/e2e.cjs",
-    "test:mongo": "node scripts/run-mongo-it.cjs"
+    "test:mongo": "node scripts/run-mongo-it.cjs",
+    "test:session-api": "node tests/session-api.cjs"
   },
   "dependencies": {
     "lucide-react": "^0.454.0",
