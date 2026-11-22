@@ -24,9 +24,24 @@ export interface LlmClient {
   completeJSON<T>(task: string, system: string, user: string, schema: z.ZodType<T>): Promise<T>;
 }
 
+export type LlmErrorCategory =
+  | "timeout"
+  | "rate_limited"
+  | "http_client_error"
+  | "http_server_error"
+  | "empty_reply"
+  | "invalid_json"
+  | "unknown";
+
 export class LlmError extends Error {
   readonly code = "llm_error" as const;
-  constructor(message: string, readonly retryable = false) { super(message); }
+  constructor(
+    message: string,
+    readonly retryable = false,
+    readonly category: LlmErrorCategory = "unknown",
+    readonly httpStatus?: number,
+    readonly task?: string,
+  ) { super(message); }
 }
 
 export interface ProviderConfig {
@@ -115,13 +130,13 @@ export class ProviderLLM implements LlmClient {
           }),
         },
       );
-      if (!res.ok) throw new LlmError(`gemini HTTP ${res.status}`, res.status === 429);
+      if (!res.ok) throw new LlmError(`gemini HTTP ${res.status}`, res.status === 429, res.status === 429 ? "rate_limited" : res.status < 500 ? "http_client_error" : "http_server_error", res.status);
       const data = (await res.json()) as {
         candidates?: { content?: { parts?: { text?: string; thought?: boolean }[] } }[];
       };
       const text = data.candidates?.[0]?.content?.parts
         ?.filter((p) => !p.thought).map((p) => p.text ?? "").join("");
-      if (!text) throw new LlmError("gemini reply had no text");
+      if (!text) throw new LlmError("gemini reply had no text", false, "empty_reply");
       return text;
     }
     if (provider === "anthropic") {
@@ -140,10 +155,10 @@ export class ProviderLLM implements LlmClient {
           messages: [{ role: "user", content: user }],
         }),
       });
-      if (!res.ok) throw new LlmError(`anthropic HTTP ${res.status}`, res.status === 429);
+      if (!res.ok) throw new LlmError(`anthropic HTTP ${res.status}`, res.status === 429, res.status === 429 ? "rate_limited" : res.status < 500 ? "http_client_error" : "http_server_error", res.status);
       const data = (await res.json()) as { content?: { type: string; text?: string }[] };
       const text = data.content?.find((b) => b.type === "text")?.text;
-      if (!text) throw new LlmError("anthropic reply had no text block");
+      if (!text) throw new LlmError("anthropic reply had no text block", false, "empty_reply");
       return text;
     }
     // OpenAI-compatible chat completions.
@@ -161,10 +176,10 @@ export class ProviderLLM implements LlmClient {
         ],
       }),
     });
-    if (!res.ok) throw new LlmError(`openai HTTP ${res.status}`, res.status === 429);
+    if (!res.ok) throw new LlmError(`openai HTTP ${res.status}`, res.status === 429, res.status === 429 ? "rate_limited" : res.status < 500 ? "http_client_error" : "http_server_error", res.status);
     const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
     const text = data.choices?.[0]?.message?.content;
-    if (!text) throw new LlmError("openai reply had no content");
+    if (!text) throw new LlmError("openai reply had no content", false, "empty_reply");
     return text;
   }
 
@@ -193,8 +208,13 @@ export class ProviderLLM implements LlmClient {
           transientRetries += 1;
           continue;
         }
-        // Never expose provider bodies, raw errors, prompts or credentials.
-        throw new LlmError("LLM request failed");
+        // Never expose provider bodies, raw errors, prompts or credentials -
+        // but keep a sanitized category and HTTP status for ops logs.
+        const category = timeout ? "timeout"
+          : err instanceof LlmError ? err.category
+          : "unknown";
+        const httpStatus = err instanceof LlmError ? err.httpStatus : undefined;
+        throw new LlmError("LLM request failed", false, category, httpStatus, task);
       }
       try {
         const parsed: unknown = JSON.parse(extractJson(raw));
@@ -206,8 +226,7 @@ export class ProviderLLM implements LlmClient {
       prompt = `${user}\n\nYour previous reply was not valid: JSON/schema validation failed. ` +
         "Reply with only the corrected JSON object matching the requested schema, no commentary.";
     }
-    void task;
-    throw new LlmError("LLM did not return valid JSON after one correction retry");
+    throw new LlmError("LLM did not return valid JSON after one correction retry", false, "invalid_json", undefined, task);
   }
 }
 

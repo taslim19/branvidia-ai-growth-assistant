@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { ChatMessage } from "@/types";
 import { CHAT_QUESTIONS } from "@/mock/chatScript";
 import type { ChatSessionState } from "@/lib/chatFlow";
-import { getLLM, type LlmClient } from "./llm/llmClient";
+import { getLLM, LlmError, type LlmClient } from "./llm/llmClient";
 
 /**
  * The chat step state machine (src/lib/chatFlow.ts) stays deterministic.
@@ -40,8 +40,12 @@ export async function extractFieldValue(
       extractSchema,
     );
     return value;
-  } catch {
+  } catch (err) {
     // Extraction must never break the conversation; the raw reply is fine.
+    if (err instanceof LlmError) {
+      console.warn(`[branvidia] chat extraction fell back. stage=${err.task ?? "chatExtract"} category=${err.category}` +
+        (err.httpStatus ? ` httpStatus=${err.httpStatus}` : ""));
+    }
     return trimmed;
   }
 }
@@ -69,7 +73,11 @@ export async function rewordReplies(
           rewordSchema,
         );
         return { ...reply, text };
-      } catch {
+      } catch (err) {
+        if (err instanceof LlmError) {
+          console.warn(`[branvidia] chat reword fell back. stage=${err.task ?? "chatReword"} category=${err.category}` +
+            (err.httpStatus ? ` httpStatus=${err.httpStatus}` : ""));
+        }
         return reply;
       }
     }),

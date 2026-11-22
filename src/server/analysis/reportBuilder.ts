@@ -87,6 +87,12 @@ export async function buildAndSaveReport(input: {
     result = await runPipeline(llm);
   } catch (err) {
     if (!(err instanceof LlmError)) throw err;
+    // Sanitized category only - never prompts, content or credentials.
+    console.error(
+      `[branvidia] LLM pipeline failed; using template report.` +
+      ` stage=${err.task ?? "unknown"} category=${err.category}` +
+      (err.httpStatus ? ` httpStatus=${err.httpStatus}` : ""),
+    );
     // Rebuild every generated field from templates, never label mixed output.
     reportSource = "template";
     result = await runPipeline(null);
