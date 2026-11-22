@@ -76,9 +76,25 @@ Every number is computed in code (`scoreCalculator.ts`), never by the LLM: the o
 
 ### LLM client (`src/server/llm/`)
 
-Provider-agnostic server-only wrapper supports **OpenAI**, **Anthropic**, and **Google Gemini**. OpenAI-compatible services can use `LLM_BASE_URL`. Gemini uses Google's `generateContent` REST endpoint with the key in `x-goog-api-key`, never in the URL. Every model reply is JSON-parsed and validated with the task's zod schema. One invalid-JSON/schema correction is allowed. HTTP 429 and timeouts allow up to two retries with 250ms then 500ms backoff. These policies share a maximum of **three HTTP attempts per pipeline task**, so retries cannot multiply.
+Provider-agnostic server-only wrapper supports **OpenAI**, **Anthropic**, and **Google Gemini**. OpenAI-compatible services (including NVIDIA NIM at `https://integrate.api.nvidia.com/v1`) can use `LLM_BASE_URL`. Gemini uses Google's `generateContent` REST endpoint with the key in `x-goog-api-key`, never in the URL. Every model reply is JSON-parsed and validated with the task's zod schema. One invalid-JSON/schema correction is allowed. HTTP 429 and timeouts allow up to two retries with 250ms then 500ms backoff; on the OpenAI-compatible branch, transient 502/503/504 gateway errors retry the same bounded way. These policies share a maximum of **three HTTP attempts per pipeline task**, so retries cannot multiply.
 
-For Gemini, set these host environment variables (server-side, not browser variables):
+Two optional tuning variables apply only to the OpenAI-compatible branch and are omitted from the request body when unset: `LLM_REASONING_EFFORT` is sent verbatim as `reasoning_effort` (NVIDIA NIM accepts `none`/`low`/`high`), and `LLM_CHAT_TEMPLATE_KWARGS` is a JSON object sent verbatim as `chat_template_kwargs` (verified on NVIDIA NIM as `{"enable_thinking": false}` to disable reasoning tokens). Set at most one of them for a given provider. Malformed `LLM_CHAT_TEMPLATE_KWARGS` JSON fails closed: no client is created and templates run instead.
+
+For NVIDIA NIM (OpenAI-compatible), set these host environment variables (server-side, not browser variables):
+
+```dotenv
+LLM_PROVIDER=openai
+LLM_BASE_URL=https://integrate.api.nvidia.com/v1
+LLM_MODEL=nvidia/nemotron-3.5-super-vl-120b-a12b
+LLM_API_KEY=<set privately in the host secret/environment settings>
+LLM_CHAT_TEMPLATE_KWARGS={"enable_thinking": false}
+LLM_TIMEOUT_MS=30000
+NEXT_PUBLIC_API_BASE_URL=/api
+```
+
+`LLM_PROVIDER=openai` selects the OpenAI-compatible protocol only; requests go to `LLM_BASE_URL`, never to OpenAI. `LLM_CHAT_TEMPLATE_KWARGS` disables the model's reasoning pass (verified live: a smoke completion returned valid JSON with zero reasoning tokens). Do not also set `LLM_REASONING_EFFORT`; NVIDIA documents `reasoning_effort=none` as the alternative, but sending both risks a provider conflict.
+
+For Gemini, set these host environment variables instead (server-side, not browser variables):
 
 ```dotenv
 LLM_PROVIDER=gemini
@@ -88,7 +104,7 @@ LLM_TIMEOUT_MS=8000
 NEXT_PUBLIC_API_BASE_URL=/api
 ```
 
-The first three select and authenticate Gemini. `LLM_TIMEOUT_MS` is optional (default 30000 per attempt); 8000 is recommended for a quicker fallback. `NEXT_PUBLIC_API_BASE_URL=/api` selects this app's backend, contains no secret, and must be set at build time for the browser bundle. It is already enabled on the current preview host. Restart the app after changing server environment variables. Do not paste keys into chat or commit an env file. Never name a key variable `NEXT_PUBLIC_*`.
+The first three select and authenticate Gemini. `LLM_TIMEOUT_MS` is optional (default 30000 per attempt); 8000 was tuned for a quicker Gemini fallback, while 30000 is recommended for NVIDIA NIM report passes. `NEXT_PUBLIC_API_BASE_URL=/api` selects this app's backend, contains no secret, and must be set at build time for the browser bundle. It is already enabled on the current preview host. Restart the app after changing server environment variables. Do not paste keys into chat or commit an env file. Never name a key variable `NEXT_PUBLIC_*`.
 
 `LLM_MODEL` is required for Gemini: the adapter has **no hard-coded Gemini model fallback**. The example above is the stable Flash model shown in Google's catalog when checked on November 22, 2026. Verify your key/project has access before switching to another model. Official references: https://ai.google.dev/gemini-api/docs/models?authuser=6 and https://ai.google.dev/api?authuser=19 . `LLM_BASE_URL` is ignored for Gemini to prevent accidentally sending its key to another host.
 

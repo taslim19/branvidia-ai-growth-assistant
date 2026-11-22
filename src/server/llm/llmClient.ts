@@ -12,6 +12,14 @@ import { z } from "zod";
  *   LLM_MODEL      required for Gemini; defaults for older adapters below
  *   LLM_BASE_URL   optional override for OpenAI-compatible endpoints
  *   LLM_TIMEOUT_MS request timeout (default 30000)
+ *   LLM_REASONING_EFFORT  optional, OpenAI-compatible providers only. Sent
+ *                  verbatim as `reasoning_effort` (e.g. "none" to disable a
+ *                  reasoning model's thinking pass on NVIDIA NIM). Omitted
+ *                  from the request body when unset.
+ *   LLM_CHAT_TEMPLATE_KWARGS  optional JSON object, OpenAI-compatible only.
+ *                  Sent verbatim as `chat_template_kwargs`; live-verified on
+ *                  NVIDIA NIM as {"enable_thinking": false} to disable
+ *                  reasoning tokens. Malformed JSON fails closed to templates.
  *
  * Structured output: the model is asked for a JSON object, the reply is
  * parsed and validated with zod, and invalid JSON gets exactly one retry
@@ -50,6 +58,8 @@ export interface ProviderConfig {
   model: string;
   baseUrl?: string;
   timeoutMs: number;
+  reasoningEffort?: string;
+  chatTemplateKwargs?: Record<string, unknown>;
 }
 
 export function llmConfigFromEnv(env: Record<string, string | undefined> = process.env): ProviderConfig | null {
@@ -61,12 +71,26 @@ export function llmConfigFromEnv(env: Record<string, string | undefined> = proce
   if (provider === "gemini" && !env.LLM_MODEL?.trim()) return null;
   const defaultModel = provider === "anthropic" ? "claude-3-5-haiku-latest" : "gpt-4o-mini";
   const timeoutMs = Number.parseInt(env.LLM_TIMEOUT_MS ?? "", 10);
+  let chatTemplateKwargs: Record<string, unknown> | undefined;
+  const rawKwargs = env.LLM_CHAT_TEMPLATE_KWARGS?.trim();
+  if (rawKwargs) {
+    try {
+      const parsed: unknown = JSON.parse(rawKwargs);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+      chatTemplateKwargs = parsed as Record<string, unknown>;
+    } catch {
+      // Malformed provider tuning must fail closed, never half-configure.
+      return null;
+    }
+  }
   return {
     provider,
     apiKey,
     model: env.LLM_MODEL?.trim() || defaultModel,
     baseUrl: env.LLM_BASE_URL?.trim() || undefined,
     timeoutMs: Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 30_000,
+    reasoningEffort: env.LLM_REASONING_EFFORT?.trim() || undefined,
+    chatTemplateKwargs,
   };
 }
 
@@ -115,7 +139,7 @@ export class ProviderLLM implements LlmClient {
 
   private async call(system: string, user: string): Promise<string> {
     if (this.transport) return this.transport(system, user);
-    const { provider, apiKey, model, baseUrl, timeoutMs } = this.config;
+    const { provider, apiKey, model, baseUrl, timeoutMs, reasoningEffort, chatTemplateKwargs } = this.config;
     const signal = AbortSignal.timeout(timeoutMs);
     if (provider === "gemini") {
       const res = await fetch(
@@ -170,13 +194,22 @@ export class ProviderLLM implements LlmClient {
         model,
         temperature: 0.4,
         response_format: { type: "json_object" },
+        // reasoning_effort and chat_template_kwargs are provider extensions
+        // (NVIDIA NIM accepts reasoning_effort none/low/high and
+        // chat_template_kwargs {"enable_thinking": false}); only sent when
+        // explicitly configured.
+        ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {}),
+        ...(chatTemplateKwargs ? { chat_template_kwargs: chatTemplateKwargs } : {}),
         messages: [
           { role: "system", content: system },
           { role: "user", content: user },
         ],
       }),
     });
-    if (!res.ok) throw new LlmError(`openai HTTP ${res.status}`, res.status === 429, res.status === 429 ? "rate_limited" : res.status < 500 ? "http_client_error" : "http_server_error", res.status);
+    // Transient gateway/server failures (502/503/504) get bounded retries
+    // within the shared attempt cap, same as 429 and timeouts.
+    const retryableStatus = res.status === 429 || (res.status >= 502 && res.status <= 504);
+    if (!res.ok) throw new LlmError(`openai HTTP ${res.status}`, retryableStatus, res.status === 429 ? "rate_limited" : res.status < 500 ? "http_client_error" : "http_server_error", res.status);
     const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
     const text = data.choices?.[0]?.message?.content;
     if (!text) throw new LlmError("openai reply had no content", false, "empty_reply");

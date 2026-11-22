@@ -37,7 +37,14 @@ Server-only, never `NEXT_PUBLIC_*` for keys:
 
 - `NEXT_PUBLIC_API_BASE_URL=/api` (set before the build; it is compiled in)
 - `USE_MOCK` / `NEXT_PUBLIC_USE_MOCK` (`true` for the credential-free demo)
-- `LLM_PROVIDER=gemini`, `LLM_API_KEY`, `LLM_MODEL`, optional `LLM_TIMEOUT_MS`
+- LLM: either Gemini (`LLM_PROVIDER=gemini`, `LLM_API_KEY`, `LLM_MODEL`,
+  optional `LLM_TIMEOUT_MS`) or NVIDIA NIM (`LLM_PROVIDER=openai`,
+  `LLM_BASE_URL=https://integrate.api.nvidia.com/v1`,
+  `LLM_MODEL=nvidia/nemotron-3.5-super-vl-120b-a12b`, `LLM_API_KEY`,
+  `LLM_CHAT_TEMPLATE_KWARGS={"enable_thinking": false}`,
+  recommended `LLM_TIMEOUT_MS=30000`). Set at most one of
+  `LLM_CHAT_TEMPLATE_KWARGS` and `LLM_REASONING_EFFORT`. After changing
+  server variables, redeploy so they take effect.
 - Real Google mode only: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`,
   `GOOGLE_OAUTH_REDIRECT_URI=https://<your-domain>/api/oauth/google/callback`
 - Optional: `ALLOWED_ORIGINS`, `RATE_LIMIT_PER_MINUTE`
@@ -47,7 +54,8 @@ Server-only, never `NEXT_PUBLIC_*` for keys:
 `/api/locations/[id]/analysis` declares `maxDuration = 200`. Vercel caps this by
 plan, so lower it in `src/app/api/locations/[id]/analysis/route.ts` if your plan
 allows less. With `LLM_TIMEOUT_MS=8000` and the template fallback the analysis
-normally finishes far sooner.
+normally finishes far sooner; NVIDIA NIM runs use 30000, still bounded by the
+route cap and the shared three-attempt retry budget.
 
 ## Deploy
 
