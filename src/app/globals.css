@@ -1,0 +1,247 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --paper: #fafafc;
+  --surface: #ffffff;
+  --mist: #f3effb;
+  --ink: #16151d;
+  --slate: #6b6880;
+  --violet: #5b21b6;
+  --violet-strong: #4c1d95;
+  --violet-on: #ffffff;
+  --violet-fg: #5b21b6;
+  --success-ink: #166534;
+  --warning-ink: #92400e;
+  --danger-ink: #b91c1c;
+  /* Control/UI border: #8f8ba3 is 3.3:1 on white surfaces, 3.2:1 on Paper. */
+  --line: #8f8ba3;
+  --overlay: rgba(22, 21, 29, 0.4);
+  --shadow-color: rgba(22, 21, 29, 0.12);
+  /* Light palette kept for forced-light print output. */
+  --print-paper: #ffffff;
+  --print-ink: #16151d;
+  --success: #15803d;
+  --success-tint: #e3f4e8;
+  --warning: #b45309;
+  --warning-tint: #fdf0dd;
+  --danger: #b91c1c;
+  --danger-tint: #fbe4e4;
+  color-scheme: light;
+}
+
+.dark {
+  --paper: #131118;
+  --surface: #1c1a26;
+  --mist: #262136;
+  --ink: #f4f3f8;
+  --slate: #a5a2b8;
+  --violet: #7c3aed;
+  --violet-strong: #6d28d9;
+  --violet-on: #ffffff;
+  --violet-fg: #a78bfa;
+  --success-ink: #4ade80;
+  --warning-ink: #f0a44a;
+  --danger-ink: #f87171;
+  /* Control/UI border: #6e6a80 is 3.3:1 on dark surfaces, 3.4:1 on dark Paper. */
+  --line: #6e6a80;
+  --overlay: rgba(0, 0, 0, 0.55);
+  --shadow-color: rgba(0, 0, 0, 0.4);
+  --success: #4ade80;
+  --success-tint: #1d3527;
+  --warning: #f0a44a;
+  --warning-tint: #3a2c17;
+  --danger: #f87171;
+  --danger-tint: #3d2020;
+  color-scheme: dark;
+}
+
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  background-color: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  touch-action: manipulation;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-poppins), ui-sans-serif, system-ui, sans-serif;
+  text-wrap: balance;
+}
+
+p,
+li {
+  text-wrap: pretty;
+}
+
+/* Keyboard focus: one consistent visible ring everywhere. */
+:focus-visible {
+  outline: 2px solid var(--violet);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Motion only answers an action; respect reduced motion. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@media (pointer: fine) {
+  html {
+    overscroll-behavior: none;
+  }
+}
+
+/* Chat message entrance: short, compositor-friendly. */
+@keyframes message-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.message-in {
+  animation: message-in 200ms ease-out;
+}
+
+@keyframes typing-dot {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  30% {
+    transform: translateY(-3px);
+    opacity: 1;
+  }
+}
+
+.typing-dot {
+  animation: typing-dot 1.2s ease-in-out infinite;
+}
+
+@keyframes score-ring-fill {
+  from {
+    stroke-dashoffset: var(--ring-empty);
+  }
+  to {
+    stroke-dashoffset: var(--ring-filled);
+  }
+}
+
+.score-ring-animated {
+  animation: score-ring-fill 900ms ease-out forwards;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spinner {
+  animation: spin 800ms linear infinite;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Print: the report becomes one calm document. */
+@media print {
+  /* Printing always uses the light palette, even when dark mode is active.
+     Every component color resolves through these variables, so redefining
+     them here repaints the whole page for print. */
+  :root,
+  .dark {
+    --paper: #fafafc;
+    --surface: #ffffff;
+    --mist: #f3effb;
+    --ink: #16151d;
+    --slate: #6b6880;
+    --violet: #5b21b6;
+    --violet-strong: #4c1d95;
+    --violet-on: #ffffff;
+    --violet-fg: #5b21b6;
+    --success-ink: #166534;
+    --warning-ink: #92400e;
+    --danger-ink: #b91c1c;
+    --line: #8f8ba3;
+    --overlay: rgba(22, 21, 29, 0.4);
+    --shadow-color: rgba(22, 21, 29, 0.12);
+    --success: #15803d;
+    --success-tint: #e3f4e8;
+    --warning: #b45309;
+    --warning-tint: #fdf0dd;
+    --danger: #b91c1c;
+    --danger-tint: #fbe4e4;
+    color-scheme: light;
+  }
+
+  body {
+    background: var(--print-paper);
+    color: var(--print-ink);
+  }
+
+  .print-hidden {
+    display: none !important;
+  }
+
+  .print-full {
+    position: static !important;
+    width: auto !important;
+    overflow: visible !important;
+  }
+
+  main {
+    padding: 0 !important;
+  }
+
+  section {
+    break-inside: avoid-page;
+    border: none !important;
+    box-shadow: none !important;
+  }
+
+  /* Cards and list items never split across pages either. */
+  .rounded-card,
+  li {
+    break-inside: avoid;
+  }
+
+  a {
+    text-decoration: none;
+    color: var(--print-ink);
+  }
+}
+
+/* The 64px header plus its border is shared by both conversation layouts. */
+:root { --site-header-height: 65px; }
+.landing-chat {
+  height: min(600px, calc(100dvh - var(--site-header-height) - 32px));
+  max-height: calc(100dvh - var(--site-header-height) - 32px);
+}
+.assistant-shell { height: calc(100dvh - var(--site-header-height)); }
+.dark .brand-wordmark { display: none; }
+.dark .brand-wordmark-dark { display: block; }
+#main-content { scroll-margin-top: var(--site-header-height); }
+h1, h2, h3, h4 { scroll-margin-top: calc(var(--site-header-height) + 16px); }

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="240" viewBox="0 0 320 240" role="img" aria-label="Cold brew coffee in a tall glass with ice">
+  <rect width="320" height="240" fill="#F3EFFB"/>
+  <rect y="180" width="320" height="60" fill="#E5E3EF"/>
+  <path d="M124 60 h72 l-8 116 a10 10 0 0 1 -10 9 h-36 a10 10 0 0 1 -10 -9 z" fill="#FFFFFF" stroke="#D9D4E8" stroke-width="3"/>
+  <path d="M128 96 h64 l-5 80 a8 8 0 0 1 -8 7 h-38 a8 8 0 0 1 -8 -7 z" fill="#4B2E20"/>
+  <rect x="136" y="70" width="18" height="18" rx="4" fill="#DCE9F5" transform="rotate(-12 145 79)"/>
+  <rect x="162" y="66" width="18" height="18" rx="4" fill="#DCE9F5" transform="rotate(10 171 75)"/>
+  <rect x="150" y="44" width="6" height="60" rx="3" fill="#5B21B6"/>
+  <path d="M128 96 h64 l-1 12 h-62 z" fill="#6B4226"/>
+</svg>

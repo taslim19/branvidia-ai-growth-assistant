@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="240" viewBox="0 0 320 240" role="img" aria-label="Grilled vegetable sandwich cut into triangles">
+  <rect width="320" height="240" fill="#F3EFFB"/>
+  <ellipse cx="160" cy="160" rx="112" ry="36" fill="#FFFFFF" stroke="#D9D4E8" stroke-width="3"/>
+  <path d="M96 148 L160 96 L160 152 z" fill="#E3B45C" stroke="#B9822E" stroke-width="3"/>
+  <path d="M224 148 L160 96 L160 152 z" fill="#EFC778" stroke="#B9822E" stroke-width="3"/>
+  <path d="M104 142 L156 100 L156 146 z" fill="#F6E3B8"/>
+  <path d="M216 142 L164 100 L164 146 z" fill="#F6E3B8"/>
+  <path d="M118 132 l28 -20 M192 132 l-20 -16" stroke="#4C8A3F" stroke-width="5" stroke-linecap="round"/>
+  <path d="M132 138 l20 -14 M204 138 l-14 -10" stroke="#C0392B" stroke-width="5" stroke-linecap="round"/>
+  <path d="M108 128 l40 -28 M212 128 l-40 -28" stroke="#8A5A33" stroke-width="2" opacity="0.4"/>
+</svg>
