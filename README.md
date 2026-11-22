@@ -135,7 +135,11 @@ grants access: enable the Business Profile APIs in the project, add
 `business.manage` to the consent screen scopes, set
 `GOOGLE_PROFILE_DATA=live` and redeploy. Sign-in then adds the
 `business.manage` scope automatically and reports are labelled
-"Live Google data".
+"Live Google data" only after the Google data calls succeed. Selecting the
+live setting alone never relabels sample or older saved reports. If required
+location, review or photo calls fail, analysis fails rather than substituting
+sample data. The profile preview can show partial live data when review/media
+aggregate calls fail; its field checks identify those unavailable fields.
 
 ## Live-backend mode (Phase 2)
 

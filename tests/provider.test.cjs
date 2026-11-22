@@ -262,6 +262,7 @@ test('configured scopes drive the authorization URL and token record', async () 
   });
   const url = new URL(p.buildAuthorizationUrl({ state: 's', codeChallenge: 'c', redirectUri: 'http://x/cb' }));
   assert.equal(url.searchParams.get('scope'), 'openid email profile');
+  assert.equal(url.searchParams.get('include_granted_scopes'), 'false');
   const { account, tokens } = await p.exchangeCode({ code: 'authcode', codeVerifier: 'ver', redirectUri: 'http://x/cb' });
   assert.equal(account.email, 'taslimx19@gmail.com');
   assert.equal(tokens.scope, 'openid email profile');

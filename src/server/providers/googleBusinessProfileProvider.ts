@@ -180,7 +180,9 @@ export class GoogleBusinessProfileProvider implements BusinessProfileProvider {
     url.searchParams.set("scope", this.requestedScopes().join(" "));
     url.searchParams.set("access_type", "offline");
     url.searchParams.set("prompt", "consent");
-    url.searchParams.set("include_granted_scopes", "true");
+    // Do not union earlier grants into this request: the permission screen
+    // must match the configured scopes, including a previous live-mode user.
+    url.searchParams.set("include_granted_scopes", "false");
     url.searchParams.set("state", input.state);
     url.searchParams.set("code_challenge", input.codeChallenge);
     url.searchParams.set("code_challenge_method", "S256");
