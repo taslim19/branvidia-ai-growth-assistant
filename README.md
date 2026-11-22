@@ -140,3 +140,7 @@ Keys are read only by server code. Provider response bodies, raw error messages,
 Only validated in-progress intake conversations are stored in sessionStorage, never localStorage. The old v1 localStorage conversation is removed best-effort without restoring it. Each restore replays the transcript and compares all collected answers, question position and phase. Pending replies are not saved as completed turns. Start over cancels pending chat updates and asks before discarding an active conversation.
 
 Consent refresh safely restarts the simulated account picker and keeps the intake. Analysis is not resumed from a saved transcript: refreshing during analysis starts a fresh conversation at step 2, without silently running analysis again. A completed report clears the conversation snapshot and stores only its report ID for the last-report card; the next conversation begins with the first question at step 2. A separate sessionStorage report cache keeps that report readable on refresh when localStorage is blocked. Saved dashboard history still uses the existing best-effort localStorage path. If sessionStorage itself is denied, conversations still work but cannot survive a full refresh.
+
+## Vercel
+
+See `docs/VERCEL.md`. Vercel needs `MONGODB_URI` and `TOKEN_ENCRYPTION_KEY`: the in-memory fallback is not durable on serverless. `/api/health` reports `durable`.

@@ -12,6 +12,10 @@ export async function GET(): Promise<Response> {
     status: "ok",
     provider: isMockMode() ? "mock" : "google",
     persistence: store.kind,
+    platform: process.env.VERCEL ? "vercel" : "self-hosted",
+    // On Vercel (serverless) in-memory stores are per-instance and lost on
+    // cold start, so only a configured MongoDB counts as durable there.
+    durable: store.kind !== "memory",
     llm: getLLM() ? "configured" : "template",
   });
 }
