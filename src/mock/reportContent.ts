@@ -318,6 +318,7 @@ export function buildMockReport(options: BuildReportOptions = {}): Report {
 
   return {
     id: options.fixedId ?? `rpt-${locationId}-${Date.now()}`,
+    dataSource: "mock",
     source: "template",
     businessName: business.name,
     createdAt: new Date().toISOString(),

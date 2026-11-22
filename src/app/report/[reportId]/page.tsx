@@ -94,10 +94,14 @@ export default function ReportPage() {
               <div>
                 <h1 className="text-xl font-bold">Optimization report</h1>
                 <p className="mt-1 text-sm text-slate">
-                  <span translate="no">{report.businessName}</span>, generated {formatDateTime(report.createdAt)}, based on sample profile data
+                  <span translate="no">{report.businessName}</span>, generated {formatDateTime(report.createdAt)}, based on {report.dataSource === "google" ? "live Google data" : "sample profile data"}
                 </p>
               </div>
-              <Badge tone="violet">Demo report</Badge>
+              {report.dataSource === "google" ? (
+                <Badge tone="success">Live Google data</Badge>
+              ) : (
+                <Badge tone="violet">Sample profile data</Badge>
+              )}
             </div>
             {notSaved ? (
               <div

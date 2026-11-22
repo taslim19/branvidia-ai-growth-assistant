@@ -67,6 +67,7 @@ export const chatTurnResultSchema = z.object({
 
 export const reportSchema = z.object({
   source: z.enum(["llm", "template"]),
+  dataSource: z.enum(["mock", "google"]).optional(),
   id: z.string().min(1),
   businessName: z.string().min(1),
   createdAt: z.string().min(1),

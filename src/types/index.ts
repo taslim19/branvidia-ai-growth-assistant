@@ -167,6 +167,13 @@ export interface ScoreBreakdown {
 
 export interface Report {
   source: "llm" | "template";
+  /**
+   * Where the business profile/reviews/photos behind this report came from:
+   * "google" only when the real Business Profile APIs were called, otherwise
+   * "mock" (bundled sample data). Optional for reports saved before the
+   * hybrid mode existed; treat a missing value as "mock".
+   */
+  dataSource?: "mock" | "google";
   id: string;
   businessName: string;
   createdAt: string; // ISO

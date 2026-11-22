@@ -4,9 +4,21 @@ import { Badge } from "@/components/ui/Badge";
 import { formatRating, formatNumber } from "@/lib/formatters";
 import { Star } from "lucide-react";
 
-export function BusinessProfileSummary({ profile }: { profile: BusinessProfile }) {
+export function BusinessProfileSummary({
+  profile,
+  sampleData = false,
+}: {
+  profile: BusinessProfile;
+  /** True while profile/reviews/photos come from the bundled sample data. */
+  sampleData?: boolean;
+}) {
   return (
     <Card className="p-5">
+      {sampleData ? (
+        <div className="mb-3">
+          <Badge tone="neutral">Sample profile data</Badge>
+        </div>
+      ) : null}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 className="text-lg font-semibold">{profile.name}</h3>

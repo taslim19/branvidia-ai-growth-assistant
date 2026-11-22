@@ -67,9 +67,10 @@ export class ProviderNotConfiguredError extends Error {
   readonly code = "not_configured" as const;
   constructor(missing: string[]) {
     super(
-      `Google provider selected (USE_MOCK=false) but not configured; missing: ${missing.join(", ")}. ` +
-        "Set them in .env.local to use the real Google path, or leave USE_MOCK=true to run, " +
-        "test and demo the app without any Google credentials.",
+      `Real Google access is selected but not configured; missing: ${missing.join(", ")}. ` +
+        "Set them in .env.local or your host's environment (see README, \"Google sign-in setup\"), " +
+        "or run without Google credentials: USE_MOCK=true for the fully simulated demo, or " +
+        "GOOGLE_PROFILE_DATA=mock (the default) to keep business data mocked.",
     );
     this.name = "ProviderNotConfiguredError";
   }

@@ -116,6 +116,7 @@ export async function buildAndSaveReport(input: {
 
   const report: Report = {
     source: reportSource,
+    dataSource: provider.name,
     id: `rpt-${input.locationId}-${Date.now()}`,
     businessName: intake.name?.trim() || profile.name,
     createdAt: new Date().toISOString(),

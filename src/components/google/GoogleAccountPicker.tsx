@@ -7,9 +7,12 @@ import { CircleUserRound } from "lucide-react";
 export function GoogleAccountPicker({
   accounts,
   onPick,
+  simulated = true,
 }: {
   accounts: GoogleAccount[];
   onPick: (account: GoogleAccount) => void;
+  /** False when the listed account is the real signed-in Google account. */
+  simulated?: boolean;
 }) {
   return (
     <div>
@@ -34,8 +37,9 @@ export function GoogleAccountPicker({
       </ul>
       <Card className="mt-4 p-3">
         <p className="text-sm text-slate">
-          This is a sample sign-in screen. No real Google account is used and no data leaves your
-          browser.
+          {simulated
+            ? "This is a sample sign-in screen. No real Google account is used and no data leaves your browser."
+            : "You signed in with your real Google account. Only the sign-in permissions you approved were used."}
         </p>
       </Card>
     </div>

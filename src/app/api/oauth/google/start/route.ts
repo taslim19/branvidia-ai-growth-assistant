@@ -1,4 +1,4 @@
-import { getBusinessProfileProvider } from "@/server/providers";
+import { getGoogleSignInProvider } from "@/server/providers";
 import { newOAuthState, newPkcePair, safeReturnTo } from "@/server/oauthSessions";
 import { json, providerErrorResponse } from "@/server/apiUtils";
 
@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
  */
 export async function GET(request: Request): Promise<Response> {
   const url = new URL(request.url);
-  const provider = getBusinessProfileProvider();
+  const provider = getGoogleSignInProvider();
   const { verifier, challenge } = newPkcePair();
   const state = await newOAuthState(verifier, safeReturnTo(url.searchParams.get("returnTo")));
   try {

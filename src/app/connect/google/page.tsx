@@ -8,6 +8,7 @@ import { GooglePermissionScreen } from "@/components/google/GooglePermissionScre
 import { BusinessLocationPicker } from "@/components/google/BusinessLocationPicker";
 import { BusinessProfileSummary } from "@/components/google/BusinessProfileSummary";
 import { DisconnectButton } from "@/components/google/DisconnectButton";
+import { useClientModes } from "@/hooks/useClientModes";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -23,6 +24,7 @@ function ConnectInner() {
   // assistant screen, which owns the chat session and the analysis runner.
   const cancelTarget = params.get("returnTo") ?? "/assistant";
   const conn = useGoogleConnection();
+  const modes = useClientModes();
 
   useEffect(() => {
     if (conn.stage === "idle" && !conn.ended && !conn.cancelled && !conn.loading && !conn.error) {
@@ -49,7 +51,13 @@ function ConnectInner() {
         </div>
         <div className="mb-6 flex items-center gap-2 text-sm text-slate">
           <ShieldCheck className="h-4 w-4 text-violet-fg" aria-hidden="true" />
-          <p>Simulated Google consent flow: sample data, nothing real is connected.</p>
+          <p>
+            {modes.useMock
+              ? "Simulated Google consent flow: sample data, nothing real is connected."
+              : modes.profileData === "live"
+                ? "Real Google sign-in and live Business Profile data."
+                : "Real Google sign-in. Business profile, reviews and photos are sample data."}
+          </p>
         </div>
         <Card lifted className="p-5 sm:p-6">
           {conn.error && conn.stage === "idle" && !conn.ended ? (
@@ -76,7 +84,11 @@ function ConnectInner() {
           ) : null}
 
           {conn.stage === "account-picker" ? (
-            <GoogleAccountPicker accounts={conn.accounts} onPick={conn.pickAccount} />
+            <GoogleAccountPicker
+              accounts={conn.accounts}
+              onPick={conn.pickAccount}
+              simulated={modes.useMock}
+            />
           ) : null}
 
           {conn.stage === "permissions" && conn.account ? (
@@ -121,10 +133,15 @@ function ConnectInner() {
             <div>
               <h2 className="text-lg font-semibold">Connected</h2>
               <p className="mt-1 text-base text-slate">
-                Branvidia can now read this profile. Here’s what it sees.
+                {modes.profileData === "live"
+                  ? "Branvidia can now read this profile. Here’s what it sees."
+                  : "Your Google account is connected. While sample data is on, Branvidia reads this sample profile instead."}
               </p>
               <div className="mt-4">
-                <BusinessProfileSummary profile={conn.profile} />
+                <BusinessProfileSummary
+                  profile={conn.profile}
+                  sampleData={modes.profileData !== "live"}
+                />
               </div>
               <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <Button

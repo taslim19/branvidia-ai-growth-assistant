@@ -1,4 +1,4 @@
-import { getBusinessProfileProvider } from "@/server/providers";
+import { getGoogleSignInProvider } from "@/server/providers";
 import {
   createSession,
   sessionCookieHeader,
@@ -22,7 +22,7 @@ function redirectWithError(origin: string, returnTo: string | null, reason: stri
  */
 export async function GET(request: Request): Promise<Response> {
   const url = new URL(request.url);
-  const provider = getBusinessProfileProvider();
+  const provider = getGoogleSignInProvider();
   const state = url.searchParams.get("state") ?? "";
   const pending = await takeOAuthState(state);
 

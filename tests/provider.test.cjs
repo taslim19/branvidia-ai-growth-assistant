@@ -11,7 +11,7 @@ Module._resolveFilename = function (name, ...rest) {
 require.extensions['.ts'] = (mod, file) => mod._compile(
   ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText, file);
 
-for (const k of ['USE_MOCK', 'NEXT_PUBLIC_USE_MOCK', 'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_OAUTH_REDIRECT_URI']) delete process.env[k];
+for (const k of ['USE_MOCK', 'NEXT_PUBLIC_USE_MOCK', 'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_OAUTH_REDIRECT_URI', 'GOOGLE_PROFILE_DATA', 'GOOGLE_SCOPES', 'LLM_API_KEY']) delete process.env[k];
 
 const { getBusinessProfileProvider, isMockMode } = require('../src/server/providers/index.ts');
 const { MockBusinessProfileProvider, MOCK_CONSENT_CODE } = require('../src/server/providers/mockProvider.ts');
@@ -21,14 +21,57 @@ const sessions = require('../src/server/oauthSessions.ts');
 
 // ---------- provider selection ----------
 
-test('mock mode is the default and explicit true; only "false" selects Google', () => {
+test('mock mode is the default and explicit true; only "false" runs server-backed', () => {
   assert.equal(isMockMode({}), true);
   assert.equal(isMockMode({ USE_MOCK: 'true' }), true);
   assert.equal(isMockMode({ NEXT_PUBLIC_USE_MOCK: 'true' }), true);
   assert.equal(isMockMode({ USE_MOCK: 'false' }), false);
   assert.equal(isMockMode({ NEXT_PUBLIC_USE_MOCK: 'false' }), false);
   assert.equal(getBusinessProfileProvider({}).name, 'mock');
-  assert.equal(getBusinessProfileProvider({ USE_MOCK: 'false' }).name, 'google');
+});
+
+// ---------- hybrid mode: profile-data and sign-in selection ----------
+
+test('GOOGLE_PROFILE_DATA: mock is the default, only "live" opts into the GBP APIs', () => {
+  const { resolveProfileData, isLiveProfileData } = require('../src/server/providers/index.ts');
+  assert.deepEqual(resolveProfileData({}), { mode: 'mock', source: 'default' });
+  assert.deepEqual(resolveProfileData({ GOOGLE_PROFILE_DATA: 'mock' }), { mode: 'mock', source: 'GOOGLE_PROFILE_DATA' });
+  assert.deepEqual(resolveProfileData({ GOOGLE_PROFILE_DATA: 'live' }), { mode: 'live', source: 'GOOGLE_PROFILE_DATA' });
+  assert.deepEqual(resolveProfileData({ GOOGLE_PROFILE_DATA: 'Live' }), { mode: 'mock', source: 'GOOGLE_PROFILE_DATA' }); // exact match only
+  assert.equal(isLiveProfileData({}), false);
+  assert.equal(isLiveProfileData({ GOOGLE_PROFILE_DATA: 'live' }), true);
+});
+
+test('hybrid selection: server-backed defaults to real sign-in + mock data; live selects Google data', () => {
+  const { getGoogleSignInProvider } = require('../src/server/providers/index.ts');
+  // Data provider
+  assert.equal(getBusinessProfileProvider({ USE_MOCK: 'false' }).name, 'mock'); // hybrid default
+  assert.equal(getBusinessProfileProvider({ USE_MOCK: 'false', GOOGLE_PROFILE_DATA: 'mock' }).name, 'mock');
+  assert.equal(getBusinessProfileProvider({ USE_MOCK: 'false', GOOGLE_PROFILE_DATA: 'live' }).name, 'google');
+  // Sign-in provider: simulated only in full mock mode, real Google otherwise
+  assert.equal(getGoogleSignInProvider({}).name, 'mock');
+  assert.equal(getGoogleSignInProvider({ USE_MOCK: 'false' }).name, 'google');
+  assert.equal(getGoogleSignInProvider({ USE_MOCK: 'false', GOOGLE_PROFILE_DATA: 'live' }).name, 'google');
+});
+
+test('resolveGoogleScopes: basic identity scopes by default; live data adds business.manage', () => {
+  const { resolveGoogleScopes } = require('../src/server/providers/index.ts');
+  assert.deepEqual(resolveGoogleScopes({}), ['openid', 'email', 'profile']);
+  assert.deepEqual(resolveGoogleScopes({ USE_MOCK: 'false' }), ['openid', 'email', 'profile']); // hybrid: no business data scope
+  assert.deepEqual(
+    resolveGoogleScopes({ USE_MOCK: 'false', GOOGLE_PROFILE_DATA: 'live' }),
+    ['openid', 'email', 'profile', 'https://www.googleapis.com/auth/business.manage'],
+  );
+  // GOOGLE_SCOPES override (space or comma separated), deduped
+  assert.deepEqual(resolveGoogleScopes({ GOOGLE_SCOPES: 'openid email' }), ['openid', 'email']);
+  assert.deepEqual(resolveGoogleScopes({ GOOGLE_SCOPES: 'openid, email,profile' }), ['openid', 'email', 'profile']);
+  // business.manage not duplicated when already configured
+  assert.deepEqual(
+    resolveGoogleScopes({ USE_MOCK: 'false', GOOGLE_PROFILE_DATA: 'live', GOOGLE_SCOPES: 'openid https://www.googleapis.com/auth/business.manage' }),
+    ['openid', 'https://www.googleapis.com/auth/business.manage'],
+  );
+  // In full mock mode nothing real is requested even if live data was left set
+  assert.deepEqual(resolveGoogleScopes({ GOOGLE_PROFILE_DATA: 'live' }), ['openid', 'email', 'profile']);
 });
 
 test('aliases: USE_MOCK wins conflicts, one coherent resolution', () => {
@@ -53,6 +96,53 @@ test('server injects the resolved mode into the page for the client', () => {
   // USE_MOCK=false alone decides the client mode: no NEXT_PUBLIC_ var needed
   assert.match(clientModeInitScript({ USE_MOCK: 'false', NEXT_PUBLIC_USE_MOCK: 'true' }),
     /window\.__BRANVIDIA_USE_MOCK__="false"/);
+});
+
+test('server also injects the profile-data mode and the exact sign-in scopes', () => {
+  const { clientModeInitScript } = require('../src/server/clientMode.ts');
+  // Default (demo) and hybrid default: mock data, basic identity scopes only
+  assert.match(clientModeInitScript({}), /window\.__BRANVIDIA_PROFILE_DATA__="mock"/);
+  assert.match(clientModeInitScript({ USE_MOCK: 'false' }), /window\.__BRANVIDIA_PROFILE_DATA__="mock"/);
+  assert.match(clientModeInitScript({ USE_MOCK: 'false' }),
+    /window\.__BRANVIDIA_GOOGLE_SCOPES__=\["openid","email","profile"\]/);
+  // Live data mode: labelled live and business.manage is on the list
+  const live = clientModeInitScript({ USE_MOCK: 'false', GOOGLE_PROFILE_DATA: 'live' });
+  assert.match(live, /window\.__BRANVIDIA_PROFILE_DATA__="live"/);
+  assert.match(live, /business\.manage/);
+  // GOOGLE_SCOPES override is what gets injected, verbatim
+  assert.match(clientModeInitScript({ USE_MOCK: 'false', GOOGLE_SCOPES: 'openid email' }),
+    /window\.__BRANVIDIA_GOOGLE_SCOPES__=\["openid","email"\]/);
+});
+
+test('client readers follow the injected config; defaults stay credential-free', () => {
+  const { profileDataModeClient, googleScopesClient } = require('../src/lib/clientConfig.ts');
+  assert.equal(profileDataModeClient(), 'mock');
+  assert.deepEqual(googleScopesClient(), ['openid', 'email', 'profile']);
+  global.window = {};
+  try {
+    window.__BRANVIDIA_PROFILE_DATA__ = 'live';
+    window.__BRANVIDIA_GOOGLE_SCOPES__ = ['openid', 'email'];
+    assert.equal(profileDataModeClient(), 'live');
+    assert.deepEqual(googleScopesClient(), ['openid', 'email']);
+    window.__BRANVIDIA_PROFILE_DATA__ = 'mock';
+    assert.equal(profileDataModeClient(), 'mock');
+  } finally {
+    delete global.window;
+  }
+});
+
+test('permission screen lists only what is really requested', () => {
+  const { scopeDisplayList, requestsBusinessData } = require('../src/lib/googleScopes.ts');
+  const basic = scopeDisplayList(['openid', 'email', 'profile']);
+  assert.equal(basic.length, 3);
+  assert.ok(basic.every((i) => !/business|review|photo/i.test(i.scope) || /profile picture/.test(i.scope)));
+  assert.equal(requestsBusinessData(['openid', 'email', 'profile']), false);
+  const live = scopeDisplayList(['openid', 'email', 'profile', 'https://www.googleapis.com/auth/business.manage']);
+  assert.ok(live.length > basic.length);
+  assert.equal(requestsBusinessData(['https://www.googleapis.com/auth/business.manage']), true);
+  // Unknown scopes are shown as Google names them, never hidden
+  const unknown = scopeDisplayList(['openid', 'https://example.com/other']);
+  assert.ok(unknown.some((i) => i.scope === 'https://example.com/other'));
 });
 
 test('client follows the injected mode; build-time env is only a fallback', () => {
@@ -159,6 +249,22 @@ test('authorization URL: real Google endpoint, read-only scope, PKCE, offline ac
   assert.equal(url.searchParams.get('state'), 'st');
   assert.equal(url.searchParams.get('code_challenge'), 'cc');
   assert.equal(url.searchParams.get('code_challenge_method'), 'S256');
+});
+
+test('configured scopes drive the authorization URL and token record', async () => {
+  const calls = [];
+  const p = new GoogleBusinessProfileProvider({
+    config: { ...CONFIG, scopes: ['openid', 'email', 'profile'] },
+    fetchImpl: fixtureFetch([
+      ['https://oauth2.googleapis.com/token', 'POST', { access_token: 'AT', expires_in: 3600, token_type: 'Bearer', scope: 'openid email profile' }],
+      ['https://openidconnect.googleapis.com/v1/userinfo', 'GET', { sub: 'g9', name: 'Taslim A', email: 'taslimx19@gmail.com' }],
+    ], calls),
+  });
+  const url = new URL(p.buildAuthorizationUrl({ state: 's', codeChallenge: 'c', redirectUri: 'http://x/cb' }));
+  assert.equal(url.searchParams.get('scope'), 'openid email profile');
+  const { account, tokens } = await p.exchangeCode({ code: 'authcode', codeVerifier: 'ver', redirectUri: 'http://x/cb' });
+  assert.equal(account.email, 'taslimx19@gmail.com');
+  assert.equal(tokens.scope, 'openid email profile');
 });
 
 test('code exchange posts the full form and maps the Google user', async () => {
@@ -436,23 +542,106 @@ test('USE_MOCK=false without Google env: 503 not_configured, never a crash', asy
   }
 });
 
-test('USE_MOCK=false with configured provider serves real code path via injected session', async () => {
-  // The provider is selected by env; here we only prove the route honours the
-  // session cookie instead of demanding credentials it cannot check.
+test('hybrid mode end to end: real sign-in session, mock business data, no Google calls', async () => {
   process.env.USE_MOCK = 'false';
+  process.env.GOOGLE_CLIENT_ID = 'fake-client-id';
+  process.env.GOOGLE_CLIENT_SECRET = 'fake-client-secret';
+  try {
+    // Sign-in start redirects to real Google with ONLY the basic scopes.
+    const start = await startRoute.GET(new Request('http://localhost:3000/api/oauth/google/start'));
+    assert.equal(start.status, 302);
+    const authUrl = new URL(start.headers.get('location'));
+    assert.equal(authUrl.origin + authUrl.pathname, 'https://accounts.google.com/o/oauth2/v2/auth');
+    assert.equal(authUrl.searchParams.get('client_id'), 'fake-client-id');
+    assert.equal(authUrl.searchParams.get('scope'), 'openid email profile');
+    assert.ok(!/business\.manage/.test(authUrl.toString()));
+
+    // A session created by the real callback (simulated here: code exchange
+    // against Google's token endpoint is covered by fixture tests above).
+    const session = await sessions.createSession(
+      { id: 'g1', name: 'Taslim A', email: 'taslimx19@gmail.com' },
+      { accessToken: 'at', refreshToken: 'rt', expiresAt: Date.now() + 3600_000, scope: 'openid email profile', tokenType: 'Bearer' },
+    );
+    const cookie = `branvidia_google_session=${session.id}`;
+
+    // The account picker shows the real signed-in account, not a mock one.
+    const res = await connectRoute.POST(new Request('http://localhost:3000/api/google/connect', {
+      method: 'POST', headers: { cookie },
+    }));
+    assert.equal(res.status, 200);
+    const { accounts } = await res.json();
+    assert.deepEqual(accounts, [{ id: 'g1', name: 'Taslim A', email: 'taslimx19@gmail.com' }]);
+
+    // Locations and profile still come from the mock provider.
+    const locs = await locationsRoute.GET(new Request('http://localhost:3000/api/google/accounts/g1/locations', { headers: { cookie } }), { params: { accountId: 'g1' } });
+    assert.equal(locs.status, 200);
+    assert.equal((await locs.json()).length, 2);
+    const prof = await profileRoute.GET(new Request('http://localhost:3000/api/google/locations/loc-indiranagar/profile', { headers: { cookie } }), { params: { locationId: 'loc-indiranagar' } });
+    assert.equal(prof.status, 200);
+    assert.equal((await prof.json()).name, 'Brew & Bean Café');
+
+    // No session: still told to connect first.
+    const anon = await connectRoute.POST(new Request('http://localhost:3000/api/google/connect', { method: 'POST' }));
+    assert.equal(anon.status, 401);
+  } finally {
+    delete process.env.USE_MOCK;
+    delete process.env.GOOGLE_CLIENT_ID;
+    delete process.env.GOOGLE_CLIENT_SECRET;
+  }
+});
+
+test('hybrid analysis labels the report dataSource=mock; live failure labels nothing', async () => {
+  process.env.USE_MOCK = 'false';
+  process.env.GOOGLE_CLIENT_ID = 'fake-client-id';
+  process.env.GOOGLE_CLIENT_SECRET = 'fake-client-secret';
   try {
     const session = await sessions.createSession(
-      { id: 'g1', name: 'Priya', email: 'priya@example.com' },
-      { accessToken: 'at', refreshToken: 'rt', expiresAt: Date.now() + 3600_000, scope: 's', tokenType: 'Bearer' },
+      { id: 'g2', name: 'Taslim A', email: 'taslimx19@gmail.com' },
+      { accessToken: 'at', refreshToken: 'rt', expiresAt: Date.now() + 3600_000, scope: 'openid email profile', tokenType: 'Bearer' },
     );
-    const res = await connectRoute.POST(new Request('http://localhost:3000/api/google/connect', {
-      method: 'POST', headers: { cookie: `branvidia_google_session=${session.id}` },
+    const analysisRoute = require('../src/app/api/locations/[id]/analysis/route.ts');
+    const res = await analysisRoute.POST(new Request('http://localhost:3000/api/locations/loc-indiranagar/analysis', {
+      method: 'POST',
+      headers: { cookie: `branvidia_google_session=${session.id}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ intake: { name: 'Brew & Bean Café' } }),
+    }), { params: { id: 'loc-indiranagar' } });
+    assert.equal(res.status, 200);
+    const report = await res.json();
+    assert.equal(report.source, 'template'); // no LLM key in tests
+    assert.equal(report.dataSource, 'mock');
+  } finally {
+    delete process.env.USE_MOCK;
+    delete process.env.GOOGLE_CLIENT_ID;
+    delete process.env.GOOGLE_CLIENT_SECRET;
+  }
+});
+
+test('GOOGLE_PROFILE_DATA=live: google provider selected, sign-in asks business.manage, 503 without credentials', async () => {
+  process.env.USE_MOCK = 'false';
+  process.env.GOOGLE_PROFILE_DATA = 'live';
+  try {
+    assert.equal(getBusinessProfileProvider().name, 'google');
+    const { getGoogleSignInProvider } = require('../src/server/providers/index.ts');
+    process.env.GOOGLE_CLIENT_ID = 'fake-client-id';
+    process.env.GOOGLE_CLIENT_SECRET = 'fake-client-secret';
+    const url = new URL(getGoogleSignInProvider().buildAuthorizationUrl({
+      state: 's', codeChallenge: 'c', redirectUri: 'http://x/cb',
     }));
-    // No GOOGLE_CLIENT_ID configured: the real provider refuses cleanly.
+    assert.match(url.searchParams.get('scope'), /business\.manage/);
+    assert.match(url.searchParams.get('scope'), /openid/);
+    // Without client credentials the routes still fail clean, never crash.
+    delete process.env.GOOGLE_CLIENT_ID;
+    delete process.env.GOOGLE_CLIENT_SECRET;
+    const res = await connectRoute.POST(new Request('http://localhost:3000/api/google/connect', {
+      method: 'POST', headers: { cookie: `branvidia_google_session=${(await sessions.createSession({ id: 'g3', name: 'T', email: 't@x.com' }, { accessToken: 'a', expiresAt: Date.now() + 3600_000, scope: 's', tokenType: 'Bearer' })).id}` },
+    }));
     assert.equal(res.status, 503);
     assert.equal((await res.json()).error, 'not_configured');
   } finally {
     delete process.env.USE_MOCK;
+    delete process.env.GOOGLE_PROFILE_DATA;
+    delete process.env.GOOGLE_CLIENT_ID;
+    delete process.env.GOOGLE_CLIENT_SECRET;
   }
 });
 
@@ -494,6 +683,12 @@ test('google provider review/photo fetch failures propagate; no partial or fabri
   const p = new GoogleBusinessProfileProvider({ config: CONFIG, fetchImpl: fixtureFetch([], []) });
   await assert.rejects(() => p.getRecentReviews('loc-1', freshTokens()));
   await assert.rejects(() => p.getRecentPhotos('loc-1', freshTokens()));
+});
+
+test('mock-built reports are labelled sample data', () => {
+  const { buildMockReport } = require('../src/mock/reportContent.ts');
+  assert.equal(buildMockReport({ locationId: 'loc-indiranagar' }).dataSource, 'mock');
+  assert.equal(buildMockReport({ fixedId: 'rpt-sample' }).dataSource, 'mock');
 });
 
 test('mock provider serves the pipeline fixtures as copies per location', async () => {

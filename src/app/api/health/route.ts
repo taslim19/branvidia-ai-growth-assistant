@@ -1,5 +1,5 @@
 import { json } from "@/server/apiUtils";
-import { isMockMode } from "@/server/providers";
+import { getBusinessProfileProvider, isLiveProfileData, isMockMode } from "@/server/providers";
 import { getReportStore } from "@/server/db/reportRepository";
 import { getLLM } from "@/server/llm/llmClient";
 
@@ -10,7 +10,11 @@ export async function GET(): Promise<Response> {
   const store = await getReportStore();
   return json({
     status: "ok",
-    provider: isMockMode() ? "mock" : "google",
+    // The data provider actually serving profile/reviews/photos; in the
+    // hybrid default this is "mock" even though sign-in is real Google.
+    provider: getBusinessProfileProvider().name,
+    signIn: isMockMode() ? "simulated" : "google",
+    profileData: !isMockMode() && isLiveProfileData() ? "live" : "mock",
     persistence: store.kind,
     platform: process.env.VERCEL ? "vercel" : "self-hosted",
     // On Vercel (serverless) in-memory stores are per-instance and lost on

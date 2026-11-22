@@ -1,4 +1,4 @@
-import { getBusinessProfileProvider, isMockMode } from "@/server/providers";
+import { getBusinessProfileProvider, isLiveProfileData, isMockMode } from "@/server/providers";
 import { readSessionFromRequest } from "@/server/oauthSessions";
 import { json, providerErrorResponse } from "@/server/apiUtils";
 import { isAllowedOrigin, originDeniedResponse } from "@/server/security/originCheck";
@@ -22,6 +22,12 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
   try {
+    // Hybrid mode (real sign-in, mocked business data): there are no real
+    // Business Profile accounts to list - show the account actually signed
+    // in with Google, and keep the sample locations for the next step.
+    if (!isMockMode() && session && !isLiveProfileData()) {
+      return json({ accounts: [session.account] });
+    }
     const accounts = await provider.listAccounts(session?.tokens ?? null);
     const email = session?.account.email;
     return json({ accounts: accounts.map((a) => (email ? { ...a, email } : a)) });

@@ -1,14 +1,19 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import type { GoogleAccount } from "@/types";
 import { Button } from "@/components/ui/Button";
+import { googleScopesClient } from "@/lib/clientConfig";
+import {
+  requestsBusinessData,
+  scopeDisplayList,
+  type ScopeDisplay,
+} from "@/lib/googleScopes";
 import { Lock } from "lucide-react";
 
-const SCOPES = [
-  { scope: "See your business name, category, hours and description", why: "to check what’s missing" },
-  { scope: "Read your reviews and ratings", why: "to find patterns in what customers say" },
-  { scope: "See your photos", why: "to check what kinds of photos you have" },
-];
+// Matches the hybrid default so the server render and first client render
+// agree; the effect below swaps in this deployment's real list.
+const DEFAULT_ITEMS = scopeDisplayList(["openid", "email", "profile"]);
 
 export function GooglePermissionScreen({
   account,
@@ -21,6 +26,14 @@ export function GooglePermissionScreen({
   onCancel: () => void;
   loading?: boolean;
 }) {
+  const [items, setItems] = useState<ScopeDisplay[]>(DEFAULT_ITEMS);
+  const [businessData, setBusinessData] = useState(false);
+  useEffect(() => {
+    const scopes = googleScopesClient();
+    setItems(scopeDisplayList(scopes));
+    setBusinessData(requestsBusinessData(scopes));
+  }, []);
+
   return (
     <div>
       <div className="flex items-center gap-2">
@@ -31,13 +44,19 @@ export function GooglePermissionScreen({
         Signed in as {account.name} ({account.email})
       </p>
       <ul className="mt-4 space-y-3">
-        {SCOPES.map((s) => (
+        {items.map((s) => (
           <li key={s.scope} className="rounded-input border border-line bg-surface px-4 py-3">
             <p className="text-base text-ink">{s.scope}</p>
             <p className="mt-0.5 text-sm text-slate">Branvidia uses this {s.why}.</p>
           </li>
         ))}
       </ul>
+      {!businessData ? (
+        <p className="mt-3 text-sm text-slate">
+          No access to your Business Profile, reviews or photos is requested. While sample data
+          is on, the report is built from the bundled sample business instead.
+        </p>
+      ) : null}
       <p className="mt-3 text-sm text-slate">
         Read-only means Branvidia can look, never change. You can disconnect any time.
       </p>

@@ -36,7 +36,18 @@ hard cap.
 Server-only, never `NEXT_PUBLIC_*` for keys:
 
 - `NEXT_PUBLIC_API_BASE_URL=/api` (set before the build; it is compiled in)
-- `USE_MOCK` / `NEXT_PUBLIC_USE_MOCK` (`true` for the credential-free demo)
+- `USE_MOCK` / `NEXT_PUBLIC_USE_MOCK` (`true` for the credential-free demo;
+  `false` for the server-backed app: real Google sign-in + the data provider
+  below)
+- `GOOGLE_PROFILE_DATA` (`mock` default = hybrid mode: real sign-in, sample
+  business data; `live` = real Business Profile APIs, which need Google's
+  approved API access - the current project quota is 0, i.e. not approved)
+- Real Google sign-in (`USE_MOCK=false`): `GOOGLE_CLIENT_ID`,
+  `GOOGLE_CLIENT_SECRET`,
+  `GOOGLE_OAUTH_REDIRECT_URI=https://<your-domain>/api/oauth/google/callback`.
+  Optional `GOOGLE_SCOPES` (default `openid email profile`). See the README
+  section "Hybrid mode: real Google sign-in + sample data" for the full
+  console setup guide.
 - LLM: either Gemini (`LLM_PROVIDER=gemini`, `LLM_API_KEY`, `LLM_MODEL`,
   optional `LLM_TIMEOUT_MS`) or NVIDIA NIM (`LLM_PROVIDER=openai`,
   `LLM_BASE_URL=https://integrate.api.nvidia.com/v1`,
@@ -45,8 +56,6 @@ Server-only, never `NEXT_PUBLIC_*` for keys:
   recommended `LLM_TIMEOUT_MS=30000`). Set at most one of
   `LLM_CHAT_TEMPLATE_KWARGS` and `LLM_REASONING_EFFORT`. After changing
   server variables, redeploy so they take effect.
-- Real Google mode only: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`,
-  `GOOGLE_OAUTH_REDIRECT_URI=https://<your-domain>/api/oauth/google/callback`
 - Optional: `ALLOWED_ORIGINS`, `RATE_LIMIT_PER_MINUTE`
 
 ## Function duration

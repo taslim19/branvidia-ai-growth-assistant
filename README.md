@@ -29,14 +29,18 @@ To test error states, force a failure for any function two ways:
 
 The sample report is always reachable at `/report/brew-and-bean-2026-11-21`. Reports you run get unique ids and are saved to `localStorage` (wrapped in try/catch) and listed on `/dashboard`, grouped by business. The chat session also persists locally so navigating into the consent flow and back never loses the conversation; “Run a new analysis” starts a clean intake.
 
-## Mock provider, and the real Google path behind USE_MOCK=false
+## Mock provider, and the real Google paths
 
 The app is fully functional without any Google credentials. That is the default and nothing else is needed to run, test or demo it.
 
-Server-side, every Google feature goes through one interface, `BusinessProfileProvider` (`src/server/providers/types.ts`):
+Server-side, every Google feature goes through one interface, `BusinessProfileProvider` (`src/server/providers/types.ts`), and two independent choices select the running mode (`src/server/providers/index.ts`):
 
-- `MockBusinessProfileProvider` (default, `USE_MOCK` unset or `true`): the complete provider - accounts, locations, profiles and even a simulated OAuth handshake - served from `src/mock/`. No credentials, no network.
-- `GoogleBusinessProfileProvider` (only when `USE_MOCK=false`): the complete real code path. OAuth 2.0 with PKCE (authorization URL, code exchange, token refresh, revocation) against `accounts.google.com` / `oauth2.googleapis.com`, and live data from the Business Profile Account Management, Business Information and legacy GMB APIs, mapped into the app's `BusinessProfile` type with field checks computed from the real location resource. It needs `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` (and optionally `GOOGLE_OAUTH_REDIRECT_URI`); without them it fails fast with a clear `not_configured` error instead of breaking the app.
+- `USE_MOCK` (default `true`): the fully simulated demo. UI, OAuth endpoints and data endpoints all run on `MockBusinessProfileProvider`, including a simulated OAuth handshake. No credentials, no network.
+- `USE_MOCK=false`: the server-backed app. **Sign-in** is then real Google OAuth 2.0 with PKCE (authorization URL, code exchange, token refresh, revocation) against `accounts.google.com` / `oauth2.googleapis.com`, needing `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`. **Business data** is selected separately by `GOOGLE_PROFILE_DATA`:
+  - `mock` (default) - the hybrid mode: real sign-in, sample business data from `MockBusinessProfileProvider`.
+  - `live` - `GoogleBusinessProfileProvider`: live data from the Business Profile Account Management, Business Information and legacy GMB APIs, mapped into the app's `BusinessProfile` type with field checks computed from the real location resource.
+
+Missing OAuth credentials in a server-backed mode fail fast with a clear `not_configured` error (HTTP 503) instead of breaking the app.
 
 Built-in API endpoints (Next.js route handlers, all going through the selected provider):
 
@@ -51,9 +55,91 @@ Built-in API endpoints (Next.js route handlers, all going through the selected p
 
 With `NEXT_PUBLIC_USE_MOCK=false`, the frontend's Google calls in `src/lib/apiClient.ts` use these same-origin routes automatically (a missing session redirects the browser into the OAuth flow). Types shared with the backend live in `src/types/index.ts`.
 
+## Hybrid mode: real Google sign-in + sample data
+
+The deployed configuration. A visitor signs in with their real Google account
+(identity scopes only), while the business profile, reviews and photos they
+analyse come from the bundled sample data.
+
+### What is real vs mocked
+
+| Piece | Hybrid mode (`USE_MOCK=false`, `GOOGLE_PROFILE_DATA=mock`) | Full mock demo (`USE_MOCK=true`, default) | Live data (`GOOGLE_PROFILE_DATA=live`) |
+| --- | --- | --- | --- |
+| Google sign-in | Real (Google consent screen) | Simulated in-app | Real |
+| OAuth scopes requested | `openid email profile` (identity only) | none (simulated) | identity + `business.manage` |
+| Google account shown | The real signed-in account | Sample account | Real GBP accounts |
+| Business profile / reviews / photos | Sample data (`src/mock/`) | Sample data | Real Business Profile APIs |
+| Locations to pick | Sample locations | Sample locations | Real locations |
+| AI report content | Real LLM output about the sample data | Real LLM output about the sample data | Real LLM output about real data |
+| Report header label | "Sample profile data" | "Sample profile data" | "Live Google data" |
+
+Honesty rules the UI follows everywhere:
+
+- The permission screen lists only the scopes the sign-in really requests
+  (driven by the same server-side resolution; unknown scopes are shown as
+  Google names them, never hidden). While business data is mocked it also
+  says plainly that no Business Profile access is requested.
+- The report header says "Sample profile data" unless the Business Profile
+  API was really called for that report. Each report records a `dataSource`
+  (`"mock" | "google"`) set from the provider that actually returned the
+  data; a failed Google call fails the analysis instead of producing a
+  mislabeled report. Reports saved before this field existed are treated as
+  sample data.
+
+### Google Cloud Console setup (one time, project owner)
+
+All in the Google Cloud project that owns the OAuth client (here: project
+"Branvidia" in the taslimx19@gmail.com account, already created):
+
+1. **OAuth consent screen** - Google Auth Platform > Branding: app name,
+   support email. Audience: **External**, publishing status **Testing**.
+2. **Scopes** - Google Auth Platform > Data access: add `openid`, `email`,
+   `profile` (all non-sensitive; no Google verification needed for them).
+   Add `business.manage` only when preparing for `GOOGLE_PROFILE_DATA=live`.
+3. **Test users** - Google Auth Platform > Audience: add each Google account
+   allowed to sign in while the app is in Testing (here: taslimx19@gmail.com).
+   Anyone not listed is blocked by Google until the app is published.
+4. **OAuth client** - Google Auth Platform > Clients > Create client:
+   type **Web application**. Authorized redirect URI for the live domain:
+   `https://branvidia-ai-growth-assistant.vercel.app/api/oauth/google/callback`
+   (add `http://localhost:3000/api/oauth/google/callback` for local dev).
+   Already created as "Branvidia web"; the client ID and secret are stored
+   in the deployment's secret manager, never in chat or the repo.
+5. No Business Profile APIs are needed for hybrid mode. They are only needed
+   for the live path below.
+
+### Host environment variables (Vercel Project Settings > Environment Variables)
+
+| Variable | Value | Notes |
+| --- | --- | --- |
+| `USE_MOCK` | `false` | Switches to the server-backed app |
+| `NEXT_PUBLIC_USE_MOCK` | `false` | Alias; keep consistent with `USE_MOCK` |
+| `NEXT_PUBLIC_API_BASE_URL` | `/api` | Built-in backend (already set; compiled into the build) |
+| `GOOGLE_PROFILE_DATA` | `mock` | Hybrid mode; the default, listed for clarity |
+| `GOOGLE_CLIENT_ID` | from the OAuth client | Server-only, never `NEXT_PUBLIC_` |
+| `GOOGLE_CLIENT_SECRET` | from the OAuth client | Server-only; never paste into chat or the repo |
+| `GOOGLE_OAUTH_REDIRECT_URI` | `https://branvidia-ai-growth-assistant.vercel.app/api/oauth/google/callback` | Must exactly match the client's registered URI |
+| `GOOGLE_SCOPES` | unset | Optional; defaults to `openid email profile` |
+| `MONGODB_URI` / `MONGODB_DB` / `TOKEN_ENCRYPTION_KEY` | as before | Durable sessions/reports; see `docs/VERCEL.md` |
+
+Redeploy after changing server variables. Sign-in then works for the test
+users from step 3; everyone else sees Google's "app is in testing" block.
+
+### The live Business Profile path (`GOOGLE_PROFILE_DATA=live`)
+
+The complete code path for real profile/review/photo data exists and is
+covered by fixture tests, but it is **dormant**: Google's Business Profile
+API access requires an approved application, and this project's quota is
+currently 0 (not approved, no application submitted). Only after Google
+grants access: enable the Business Profile APIs in the project, add
+`business.manage` to the consent screen scopes, set
+`GOOGLE_PROFILE_DATA=live` and redeploy. Sign-in then adds the
+`business.manage` scope automatically and reports are labelled
+"Live Google data".
+
 ## Live-backend mode (Phase 2)
 
-Set `NEXT_PUBLIC_API_BASE_URL=/api` and restart. Chat, analysis and report calls in `src/lib/apiClient.ts` then go to the built-in route handlers instead of the client-side mock; without the variable, mock mode is byte-for-byte unchanged. The Google provider still follows `USE_MOCK`, so live-backend mode runs with zero credentials on the mock provider, and `USE_MOCK=false` layers the real Google path on top.
+Set `NEXT_PUBLIC_API_BASE_URL=/api` and restart. Chat, analysis and report calls in `src/lib/apiClient.ts` then go to the built-in route handlers instead of the client-side mock; without the variable, mock mode is byte-for-byte unchanged. The Google side still follows `USE_MOCK` + `GOOGLE_PROFILE_DATA`, so live-backend mode runs with zero credentials on the mock provider, and `USE_MOCK=false` layers the hybrid mode (real sign-in, sample data) or the live Google path on top.
 
 Routes added:
 

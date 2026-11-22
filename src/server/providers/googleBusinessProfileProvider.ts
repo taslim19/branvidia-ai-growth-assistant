@@ -22,7 +22,21 @@ const LEGACY_GMB_API = "https://mybusiness.googleapis.com/v4";
 
 // business.manage is the only scope Google offers for Business Profile data;
 // this app only ever reads.
-const OAUTH_SCOPE = "https://www.googleapis.com/auth/business.manage openid email profile";
+export const BUSINESS_MANAGE_SCOPE = "https://www.googleapis.com/auth/business.manage";
+
+// Hybrid mode (the default when the app runs server-backed): a real Google
+// sign-in asks for identity only - no Business Profile access at all.
+export const DEFAULT_GOOGLE_SCOPES = ["openid", "email", "profile"];
+
+/** Split a GOOGLE_SCOPES value (space or comma separated) into a clean list. */
+export function parseScopeList(raw: string | undefined): string[] | null {
+  if (raw === undefined) return null;
+  const scopes = raw
+    .split(/[\s,]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return scopes.length > 0 ? scopes.filter((s, i) => scopes.indexOf(s) === i) : null;
+}
 
 const LOCATION_READ_MASK = [
   "name",
@@ -40,6 +54,12 @@ export interface GoogleProviderConfig {
   clientId?: string;
   clientSecret?: string;
   redirectUri?: string;
+  /**
+   * OAuth scopes to request. Undefined keeps the historical default (basic
+   * sign-in scopes plus business.manage). The factories in ./index.ts always
+   * pass an explicit list resolved from GOOGLE_SCOPES + GOOGLE_PROFILE_DATA.
+   */
+  scopes?: string[];
 }
 
 export function googleConfigFromEnv(env: NodeJS.ProcessEnv = process.env): GoogleProviderConfig {
@@ -124,6 +144,11 @@ export class GoogleBusinessProfileProvider implements BusinessProfileProvider {
     this.fetchImpl = options.fetchImpl ?? (globalThis.fetch as unknown as FetchImpl);
   }
 
+  /** The scopes this provider instance requests on the consent screen. */
+  requestedScopes(): string[] {
+    return this.config.scopes ?? [...DEFAULT_GOOGLE_SCOPES, BUSINESS_MANAGE_SCOPE];
+  }
+
   missingConfig(): string[] {
     const missing: string[] = [];
     if (!this.config.clientId) missing.push("GOOGLE_CLIENT_ID");
@@ -152,7 +177,7 @@ export class GoogleBusinessProfileProvider implements BusinessProfileProvider {
     url.searchParams.set("client_id", this.config.clientId as string);
     url.searchParams.set("redirect_uri", this.redirectUri(input.redirectUri));
     url.searchParams.set("response_type", "code");
-    url.searchParams.set("scope", OAUTH_SCOPE);
+    url.searchParams.set("scope", this.requestedScopes().join(" "));
     url.searchParams.set("access_type", "offline");
     url.searchParams.set("prompt", "consent");
     url.searchParams.set("include_granted_scopes", "true");
@@ -192,7 +217,7 @@ export class GoogleBusinessProfileProvider implements BusinessProfileProvider {
       accessToken: data.access_token,
       refreshToken: data.refresh_token,
       expiresAt: Date.now() + (data.expires_in ?? 3600) * 1000,
-      scope: data.scope ?? OAUTH_SCOPE,
+      scope: data.scope ?? this.requestedScopes().join(" "),
       tokenType: data.token_type ?? "Bearer",
     };
     const info = (await this.fetchJson(
