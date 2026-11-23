@@ -55,6 +55,14 @@ function isLocalMock(): boolean {
   return !LIVE_BACKEND && isMockModeClient();
 }
 
+/**
+ * True when reports persist in this browser's localStorage (pure mock mode);
+ * false when the configured backend stores them durably.
+ */
+export function reportsStoredOnDevice(): boolean {
+  return isLocalMock();
+}
+
 const REPORTS_KEY = "branvidia:saved-reports";
 
 function delay(ms = 350): Promise<void> {

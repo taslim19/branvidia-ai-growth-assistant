@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { useSavedReports } from "@/hooks/useSavedReports";
+import { reportsStoredOnDevice } from "@/lib/apiClient";
 import { BusinessList } from "@/components/dashboard/BusinessList";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -12,6 +14,12 @@ import { FolderOpen } from "lucide-react";
 export default function DashboardPage() {
   const { reports, loading, error, reload } = useSavedReports();
   const connection = useStoredConnection();
+  // Where reports persist: this browser in pure mock mode, the backend's
+  // durable store otherwise. Default matches the credential-free demo.
+  const [onDevice, setOnDevice] = useState(true);
+  useEffect(() => {
+    setOnDevice(reportsStoredOnDevice());
+  }, []);
 
   return (
     <main className="flex flex-1 flex-col">
@@ -20,7 +28,9 @@ export default function DashboardPage() {
           <div>
             <h1 className="text-xl font-bold">Your analyses</h1>
             <p className="mt-1 max-w-prose70 text-base text-slate">
-              Reports you run are saved on this device so you can compare scores over time.
+              {onDevice
+                ? "Reports you run are saved on this device so you can compare scores over time."
+                : "Reports you run are saved securely in the cloud so you can compare scores over time."}
             </p>
           </div>
           <Link

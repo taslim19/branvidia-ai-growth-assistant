@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useGoogleConnection } from "@/hooks/useGoogleConnection";
 import { GoogleAccountPicker } from "@/components/google/GoogleAccountPicker";
@@ -9,6 +9,7 @@ import { BusinessLocationPicker } from "@/components/google/BusinessLocationPick
 import { BusinessProfileSummary } from "@/components/google/BusinessProfileSummary";
 import { DisconnectButton } from "@/components/google/DisconnectButton";
 import { useClientModes } from "@/hooks/useClientModes";
+import { reportsStoredOnDevice } from "@/lib/apiClient";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -25,6 +26,10 @@ function ConnectInner() {
   const cancelTarget = params.get("returnTo") ?? "/assistant";
   const conn = useGoogleConnection();
   const modes = useClientModes();
+  const [reportsOnDevice, setReportsOnDevice] = useState(true);
+  useEffect(() => {
+    setReportsOnDevice(reportsStoredOnDevice());
+  }, []);
 
   useEffect(() => {
     if (conn.stage === "idle" && !conn.ended && !conn.cancelled && !conn.loading && !conn.error) {
@@ -68,8 +73,10 @@ function ConnectInner() {
             <div>
               <h2 className="text-lg font-semibold">Disconnected</h2>
               <p className="mt-1 text-base text-slate">
-                Branvidia can no longer read any Google profile. Your saved reports stay on this
-                device.
+                Branvidia can no longer read any Google profile.{" "}
+                {reportsOnDevice
+                  ? "Your saved reports stay on this device."
+                  : "Your saved reports stay saved in the cloud."}
               </p>
               <div className="mt-4">
                 <Button onClick={() => void conn.begin()}>Connect Google</Button>

@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense, useEffect, useRef } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useChatSession } from "@/hooks/useChatSession";
 import { ChatWindow } from "@/components/chat/ChatWindow";
 import { ChatHeader } from "@/components/chat/ChatHeader";
 import { Card } from "@/components/ui/Card";
 import { PermissionList } from "@/components/optin/PermissionList";
+import { profileDataModeClient } from "@/lib/clientConfig";
 import { MessageSquare, BarChart3, Camera } from "lucide-react";
 
 function LandingInner() {
@@ -15,6 +16,12 @@ function LandingInner() {
   const params = useSearchParams();
   const session = useChatSession(true);
   const handledCancel = useRef(false);
+  // Honest about the data source: only "live" mode reads a real profile.
+  // Default matches this deployment's hybrid mode (sample business data).
+  const [profileLive, setProfileLive] = useState(false);
+  useEffect(() => {
+    setProfileLive(profileDataModeClient() === "live");
+  }, []);
 
   useEffect(() => {
     if (params.get("cancelled") === "1" && !handledCancel.current && session.ready) {
@@ -80,7 +87,9 @@ function LandingInner() {
               <div>
                 <h3 className="text-base font-semibold">Reads your reviews and photos</h3>
                 <p className="mt-1 text-sm text-slate">
-                  With your permission, it reads your Google profile: reviews, photos and details.
+                  {profileLive
+                    ? "With your permission, it reads your Google profile: reviews, photos and details."
+                    : "With your permission, it connects your Google account. Reports currently run on bundled sample reviews, photos and profile details."}
                 </p>
               </div>
             </li>
@@ -105,8 +114,10 @@ function LandingInner() {
             <PermissionList />
           </div>
           <p className="mt-4 max-w-prose70 text-sm text-slate">
-            Access is read-only and you can revoke it any time. This site currently runs on sample
-            data while the live connection is being built.
+            Access is read-only and you can revoke it any time.
+            {profileLive
+              ? ""
+              : " This site currently runs on sample data while the live connection is being built."}
           </p>
         </div>
       </section>

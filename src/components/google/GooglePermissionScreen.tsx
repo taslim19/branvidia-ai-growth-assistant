@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { GoogleAccount } from "@/types";
 import { Button } from "@/components/ui/Button";
 import { googleScopesClient } from "@/lib/clientConfig";
+import { isMockModeClient } from "@/lib/apiClient";
 import {
   requestsBusinessData,
   scopeDisplayList,
@@ -28,10 +29,15 @@ export function GooglePermissionScreen({
 }) {
   const [items, setItems] = useState<ScopeDisplay[]>(DEFAULT_ITEMS);
   const [businessData, setBusinessData] = useState(false);
+  // In a real sign-in the Google consent already happened on
+  // accounts.google.com; say so plainly so this app-served screen is not
+  // mistaken for Google's. Default matches the simulated demo.
+  const [simulated, setSimulated] = useState(true);
   useEffect(() => {
     const scopes = googleScopesClient();
     setItems(scopeDisplayList(scopes));
     setBusinessData(requestsBusinessData(scopes));
+    setSimulated(isMockModeClient());
   }, []);
 
   return (
@@ -43,6 +49,12 @@ export function GooglePermissionScreen({
       <p className="mt-1 text-base text-slate">
         Signed in as {account.name} ({account.email})
       </p>
+      {!simulated ? (
+        <p className="mt-1 text-sm text-slate">
+          You signed in on Google’s own consent screen (accounts.google.com). This page is shown by
+          Branvidia, not Google, and confirms what that access covers.
+        </p>
+      ) : null}
       <ul className="mt-4 space-y-3">
         {items.map((s) => (
           <li key={s.scope} className="rounded-input border border-line bg-surface px-4 py-3">

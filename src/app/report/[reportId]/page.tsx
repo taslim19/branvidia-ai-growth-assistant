@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import type { Report } from "@/types";
-import { getReport, isReportPersisted } from "@/lib/apiClient";
+import { getReport, isReportPersisted, reportsStoredOnDevice } from "@/lib/apiClient";
 import { OptimizationScoreRing } from "@/components/report/OptimizationScoreRing";
 import { ScoreBreakdown } from "@/components/report/ScoreBreakdown";
 import { BusinessOverviewSection } from "@/components/report/BusinessOverviewSection";
@@ -32,6 +32,12 @@ export default function ReportPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notSaved, setNotSaved] = useState(false);
+  // Where reports persist: this browser in pure mock mode, the backend's
+  // durable store otherwise. Default matches the credential-free demo.
+  const [reportsOnDevice, setReportsOnDevice] = useState(true);
+  useEffect(() => {
+    setReportsOnDevice(reportsStoredOnDevice());
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -62,8 +68,14 @@ export default function ReportPage() {
           </div>
         ) : error === "not-found" ? (
           <EmptyState
-            title="This report isn’t on this device"
-            message="Reports are saved in this browser. Run a new analysis to get a fresh report."
+            title={
+              reportsOnDevice ? "This report isn’t on this device" : "This report wasn’t found"
+            }
+            message={
+              reportsOnDevice
+                ? "Reports are saved in this browser. Run a new analysis to get a fresh report."
+                : "It may have been removed, or the link is wrong. Run a new analysis to get a fresh report."
+            }
             action={
               <Link
                 href="/assistant?new=1"
