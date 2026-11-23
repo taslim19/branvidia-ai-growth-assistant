@@ -13,6 +13,7 @@ import {
   SKIP_REPLY,
   CONNECT_LATER_NOTE,
 } from "@/mock/chatScript";
+import { answerQuestion, isEditRequest, isKeepCurrent, isQuestion } from "./chatFacts";
 
 // Pure chat-flow logic: given the session state and what the user typed,
 // decide the assistant's next messages. apiClient.sendChatMessage wraps this
@@ -47,8 +48,59 @@ export function openingTurn(): ChatTurnResult {
   };
 }
 
+const OPEN_PHASES: ChatPhase[] = ["asking", "optin", "tips", "awaiting-choice"];
+const AFTER_INTAKE_CHIPS = ["Edit my answers", "What data do you access?", "Is it safe?"];
+
+function currentStep(state: ChatSessionState): FlowStepIndex {
+  return state.phase === "asking" ? (state.questionIndex <= 0 ? 1 : 2) : 3;
+}
+
+// Re-ask the question the user was on, in short form.
+function resumeText(state: ChatSessionState): string {
+  const q = CHAT_QUESTIONS[state.questionIndex];
+  if (!q) return "";
+  return state.questionIndex === 0 ? "Back to it: what’s your business called?" : fillTemplate(q.ask, state.info);
+}
+
+function questionChips(state: ChatSessionState, base: string[]): string[] {
+  const q = CHAT_QUESTIONS[state.questionIndex];
+  return q && state.info[q.key] ? ["Keep current", ...base] : base;
+}
+
 export function processChatTurn(state: ChatSessionState, input: string): ChatTurnResult {
   const trimmed = input.trim();
+
+  // Questions can be asked at any point. Answer from the fact sheet and
+  // resume exactly where the conversation was; the state does not change.
+  if (OPEN_PHASES.includes(state.phase) && isQuestion(trimmed)) {
+    const answer = answerQuestion(trimmed);
+    const replies: ChatTurnResult["replies"] = [
+      { role: "assistant", kind: "text", text: answer.text, verbatim: true, quickReplies: state.phase === "asking" ? undefined : [...AFTER_INTAKE_CHIPS] },
+    ];
+    if (state.phase === "asking") {
+      const q = CHAT_QUESTIONS[state.questionIndex];
+      replies.push({
+        role: "assistant",
+        kind: "text",
+        text: resumeText(state),
+        quickReplies: q ? questionChips(state, q.quickReplies) : undefined,
+      });
+    }
+    return { replies, state, step: currentStep(state) };
+  }
+
+  // Go back and fix an answer. Existing answers are kept unless replaced.
+  if (state.phase !== "asking" && OPEN_PHASES.includes(state.phase) && isEditRequest(trimmed)) {
+    const next: ChatSessionState = { questionIndex: 0, phase: "asking", info: state.info };
+    return {
+      replies: [
+        { role: "assistant", kind: "text", text: "Sure. Type a new answer, or tap Keep current to leave one as it is.", verbatim: true },
+        { role: "assistant", kind: "text", text: resumeText(next), quickReplies: questionChips(next, CHAT_QUESTIONS[0].quickReplies) },
+      ],
+      state: next,
+      step: 1,
+    };
+  }
 
   // Post-opt-in free choices ("connect later" style chips on the tips card).
   if (state.phase === "tips") {
@@ -57,10 +109,26 @@ export function processChatTurn(state: ChatSessionState, input: string): ChatTur
         {
           role: "assistant",
           kind: "text",
-          text: "Whenever you’re ready, tap Connect Google and I’ll build the full report from your profile.",
+          text: "Whenever you’re ready, tap Connect Google and I’ll build the full report.",
         },
       ],
       state: { ...state, phase: "awaiting-choice" },
+      step: 3,
+    };
+  }
+
+  if (state.phase === "optin" || state.phase === "awaiting-choice") {
+    return {
+      replies: [
+        {
+          role: "assistant",
+          kind: "text",
+          text: "You can ask me anything about the Google connection, say “Edit my answers” to change something, or use the buttons above to continue.",
+          verbatim: true,
+          quickReplies: [...AFTER_INTAKE_CHIPS],
+        },
+      ],
+      state,
       step: 3,
     };
   }
@@ -72,7 +140,8 @@ export function processChatTurn(state: ChatSessionState, input: string): ChatTur
   const q = CHAT_QUESTIONS[state.questionIndex];
   if (!q) return { replies: [], state, step: 2 };
 
-  const info = { ...state.info, [q.key]: trimmed };
+  const kept = isKeepCurrent(trimmed) && state.info[q.key] ? state.info[q.key] : undefined;
+  const info = { ...state.info, [q.key]: kept ?? trimmed };
 
   // More questions to ask.
   if (state.questionIndex < CHAT_QUESTIONS.length - 1) {
@@ -83,7 +152,7 @@ export function processChatTurn(state: ChatSessionState, input: string): ChatTur
           role: "assistant",
           kind: "text",
           text: fillTemplate(next.ask, info),
-          quickReplies: next.quickReplies,
+          quickReplies: questionChips({ ...state, questionIndex: state.questionIndex + 1, info }, next.quickReplies),
         },
       ],
       state: { questionIndex: state.questionIndex + 1, phase: "asking", info },
@@ -101,7 +170,7 @@ export function processChatTurn(state: ChatSessionState, input: string): ChatTur
         text: buildSummaryText(full),
         summaryRows: buildSummaryRows(full),
       },
-      { role: "assistant", kind: "optin", text: OPT_IN_MESSAGE },
+      { role: "assistant", kind: "optin", text: OPT_IN_MESSAGE, quickReplies: [...AFTER_INTAKE_CHIPS] },
     ],
     state: { ...state, info, phase: "optin" },
     step: 3,

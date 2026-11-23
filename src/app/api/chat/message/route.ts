@@ -5,6 +5,7 @@ import { isAllowedOrigin, originDeniedResponse } from "@/server/security/originC
 import { checkRateLimit, clientIp, rateLimitedResponse, rateLimitPerMinute } from "@/server/security/rateLimiter";
 import { extractFieldValue, rewordReplies } from "@/server/chatAssist";
 import { CHAT_QUESTIONS } from "@/mock/chatScript";
+import { isKeepCurrent, isQuestion } from "@/lib/chatFacts";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +35,7 @@ export async function POST(request: Request): Promise<Response> {
   const { state, input } = parsed.data;
 
   const value =
-    state.phase === "asking" && CHAT_QUESTIONS[state.questionIndex]
+    state.phase === "asking" && CHAT_QUESTIONS[state.questionIndex] && !isQuestion(input) && !isKeepCurrent(input)
       ? await extractFieldValue(state, input)
       : input.trim();
   const turn = processChatTurn(state, value);

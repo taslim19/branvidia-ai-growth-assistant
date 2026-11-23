@@ -65,7 +65,7 @@ export function buildGeneralTips(info: BusinessInfo): string[] {
 }
 
 export const OPT_IN_MESSAGE =
-  "To go further, I can read your Google Business Profile, including reviews, photos and details, and build a specific report. Here’s exactly what that means before you decide.";
+  "To go further, you can sign in with Google and I’ll build a specific report covering profile details, reviews and photos. Google hasn’t approved live Business Profile access for this project yet, so that part uses a sample profile. Here’s exactly what that means before you decide.";
 
 export const SKIP_REPLY =
   "No problem, the Google connection is optional. Here are 3 things you can do from what you told me.";

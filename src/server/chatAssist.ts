@@ -61,7 +61,7 @@ export async function rewordReplies(
   if (!llm) return replies;
   return Promise.all(
     replies.map(async (reply) => {
-      if (reply.kind !== "text") return reply;
+      if (reply.kind !== "text" || reply.verbatim) return reply;
       try {
         const { text } = await llm.completeJSON(
           "chatReword",

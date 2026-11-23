@@ -20,6 +20,8 @@ export interface ChatMessage {
   summaryRows?: { label: string; value: string }[];
   tips?: string[];
   quickReplies?: string[];
+  /** Fixed-fact replies are shown exactly as written (never reworded by the model). */
+  verbatim?: boolean;
   createdAt: string;
 }
 

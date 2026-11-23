@@ -64,7 +64,7 @@ export function useChatSession(autoStart: boolean) {
     setLastReport(null); void fresh();
   }, [fresh]);
   const send = useCallback(async (text:string) => {
-    if (busy.current || !text.trim() || !["asking","tips"].includes(current.current.state.phase)) return;
+    if (busy.current || !text.trim() || !["asking","tips","optin","awaiting-choice"].includes(current.current.state.phase)) return;
     busy.current=true; setError(null); setTyping(true);
     const token=generation.current;
     const user: SessionMessage[]=materialize({replies:[{role:"user",kind:"text",text:text.trim()}]}); setPending(user);
@@ -72,7 +72,7 @@ export function useChatSession(autoStart: boolean) {
       const result=await sendChatMessage(current.current.state,text.trim());
       if (token===generation.current) {
         const question = current.current.state.phase === "asking" ? CHAT_QUESTIONS[current.current.state.questionIndex] : undefined;
-        if (question) user[0].intakeValue = result.state.info[question.key];
+        if (question && (result.state.questionIndex !== current.current.state.questionIndex || result.state.phase !== current.current.state.phase)) user[0].intakeValue = result.state.info[question.key];
         commit({version:2,state:result.state,messages:[...current.current.messages,...user,...materialize(result)]});
       }
     } catch { if (token===generation.current) setError("That message didn’t go through. Try sending it again."); }

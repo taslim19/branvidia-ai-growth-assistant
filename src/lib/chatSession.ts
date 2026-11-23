@@ -59,7 +59,7 @@ export function validateSession(value: unknown): SessionSnapshot | null {
     consume(openingTurn().replies);
     while (cursor < p.messages.length) {
       const m = p.messages[cursor];
-      if (m.role === "user" && m.kind === "text" && m.text.trim() && (state.phase === "asking" || state.phase === "tips")) {
+      if (m.role === "user" && m.kind === "text" && m.text.trim() && ["asking", "tips", "optin", "awaiting-choice"].includes(state.phase)) {
         cursor++;
         if (m.quickReplies !== undefined || m.summaryRows !== undefined || m.tips !== undefined) return null;
         if (state.phase !== "asking" && m.intakeValue !== undefined) return null;
