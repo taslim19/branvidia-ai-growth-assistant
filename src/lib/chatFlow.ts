@@ -13,7 +13,7 @@ import {
   SKIP_REPLY,
   CONNECT_LATER_NOTE,
 } from "@/mock/chatScript";
-import { answerQuestion, isEditRequest, isKeepCurrent, isQuestion } from "./chatFacts";
+import { answerQuestion, isEditRequest, isKeepCurrent, isQuestion, RESUME_PROMPTS } from "./chatFacts";
 
 // Pure chat-flow logic: given the session state and what the user typed,
 // decide the assistant's next messages. apiClient.sendChatMessage wraps this
@@ -55,11 +55,10 @@ function currentStep(state: ChatSessionState): FlowStepIndex {
   return state.phase === "asking" ? (state.questionIndex <= 0 ? 1 : 2) : 3;
 }
 
-// Re-ask the question the user was on, in short form.
+// Re-ask the question the user was on, in short form (no greeting repeated).
 function resumeText(state: ChatSessionState): string {
   const q = CHAT_QUESTIONS[state.questionIndex];
-  if (!q) return "";
-  return state.questionIndex === 0 ? "Back to it: what’s your business called?" : fillTemplate(q.ask, state.info);
+  return q ? `Back to it: ${RESUME_PROMPTS[q.key] ?? q.ask}` : "";
 }
 
 function questionChips(state: ChatSessionState, base: string[]): string[] {
@@ -83,6 +82,7 @@ export function processChatTurn(state: ChatSessionState, input: string): ChatTur
         role: "assistant",
         kind: "text",
         text: resumeText(state),
+        verbatim: true,
         quickReplies: q ? questionChips(state, q.quickReplies) : undefined,
       });
     }
@@ -95,7 +95,7 @@ export function processChatTurn(state: ChatSessionState, input: string): ChatTur
     return {
       replies: [
         { role: "assistant", kind: "text", text: "Sure. Type a new answer, or tap Keep current to leave one as it is.", verbatim: true },
-        { role: "assistant", kind: "text", text: resumeText(next), quickReplies: questionChips(next, CHAT_QUESTIONS[0].quickReplies) },
+        { role: "assistant", kind: "text", text: resumeText(next), verbatim: true, quickReplies: questionChips(next, CHAT_QUESTIONS[0].quickReplies) },
       ],
       state: next,
       step: 1,

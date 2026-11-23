@@ -16,7 +16,20 @@ describe("mid-chat questions", () => {
     const { turn, state } = run(["Brew & Bean", "What data do you access?"]);
     expect(state).toEqual(before);
     expect(turn.replies[0].text).toMatch(/name, email address and profile picture/);
-    expect(turn.replies[1].text).toMatch(/kind of business/);
+    expect(turn.replies[1].text).toBe("Back to it: what kind of business is it?");
+  });
+  it("handles natural questions without a question mark but keeps real answers", () => {
+    const base = ["Brew & Bean", "Café", "Coffee", "Students"];
+    for (const q of ["what do you do with my data", "Is it safe", "can you post for me", "explain the score"]) {
+      const { turn, state } = run([...base, q]);
+      expect(state.phase).toBe("asking");
+      expect(state.questionIndex).toBe(4);
+      expect(turn.replies[0].verbatim).toBe(true);
+    }
+    for (const a of ["How to get more customers", "Do better than competitors", "We are known for great coffee"]) {
+      const { state } = run([...base, a]);
+      expect(state.phase).toBe("optin");
+    }
   });
   it("admits when it does not know", () => {
     expect(answerQuestion("what colour is the moon?").text).toMatch(/don't have a good answer/);

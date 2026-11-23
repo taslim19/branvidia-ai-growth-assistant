@@ -9,9 +9,27 @@ export interface FactAnswer {
 
 const TOPIC_CHIPS = ["What data do you access?", "Is it safe?", "What's in the report?", "How is the score worked out?"];
 
+// A question mark, or a common question form about the assistant, the data or
+// the report. Intake answers that merely start with a question word ("How to
+// get more customers") are not swallowed: the wh-forms need "you/your/it/this".
+const QUESTION_FORMS: RegExp[] = [
+  /^\s*(what|why|how|who|where|when|which)\b.*\b(you|your|it|this|that)\b/i,
+  /^\s*(is|are|do|does|can|could|will|would|should)\s+(you|it|this|that|the|my data|google|branvi)\b/i,
+  /^\s*(tell me|explain)\b/i,
+];
+
 export function isQuestion(input: string): boolean {
-  return input.includes("?");
+  return input.includes("?") || QUESTION_FORMS.some((re) => re.test(input));
 }
+
+// Short form of each intake question, used when resuming after an answer.
+export const RESUME_PROMPTS: Record<string, string> = {
+  name: "what’s your business called?",
+  category: "what kind of business is it?",
+  productsServices: "what do you mainly sell or offer?",
+  targetCustomers: "who are your usual customers?",
+  goals: "what would you like more of in the next few months?",
+};
 
 export function isKeepCurrent(input: string): boolean {
   return input.trim().toLowerCase() === "keep current";

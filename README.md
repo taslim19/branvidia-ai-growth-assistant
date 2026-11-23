@@ -18,6 +18,10 @@ Then open http://localhost:3000.
 
 Other scripts: `npm run build` (production build), `npm start` (serve the build), `npm run lint`.
 
+## Chat questions and editing answers
+
+The intake is a fixed set of five questions (`src/lib/chatFlow.ts`). At any point, including at the Google opt-in step, the visitor can ask a question, with or without a question mark ("What data do you access?", "is it safe", "explain the score"). Those are answered from a small, fixed fact sheet in `src/lib/chatFacts.ts` covering data access, privacy, the report, the score, optional Google, photos and review replies. This is not open-ended chat: the answers are deterministic (the model never rewrites them, so they cannot invent facts), anything outside the fact sheet gets "I don't have a good answer to that one", and the chat then returns to the question it was on. "Edit my answers" (chip or typed) walks back through the five answers with a "Keep current" option before the Google step.
+
 ## How mock mode works
 
 Every data call in the UI goes through the typed functions in `src/lib/apiClient.ts` (`sendChatMessage`, `startGoogleConnect`, `listBusinessLocations`, `getBusinessProfile`, `runAnalysis`, `getReport`, `listReports`, `disconnectGoogle`). With `NEXT_PUBLIC_USE_MOCK=true` each function resolves from `src/mock/` after a short simulated delay: realistic but deliberately flawed data for Brew & Bean Café, Indiranagar. Components never import mock data directly.
